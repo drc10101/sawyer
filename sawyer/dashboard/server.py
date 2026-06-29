@@ -7,6 +7,14 @@ Provides:
 - GET /accounts — List all token accounts
 - GET /accounts/{user_id} — Account detail and usage
 - GET /inference/history/{user_id} — Inference history for a user
+- GET /providers — List all providers
+- GET /providers/{provider_id} — Provider detail + earnings
+- POST /providers/register — Register a new provider
+- POST /providers/{provider_id}/onboarding — Start Stripe Connect onboarding
+- GET /providers/{provider_id}/verification — Check verification status
+- GET /providers/{provider_id}/payouts — Payout history
+- POST /providers/{provider_id}/payout — Trigger a payout
+- GET /providers/network/summary — Network-wide provider stats
 - GET /health — Health check
 - GET /stats — Aggregate statistics
 - GET /audit — Audit log query
@@ -18,6 +26,7 @@ from typing import Any
 from fastapi import Depends, FastAPI, HTTPException, Request
 
 from sawyer.auth.api import InvalidAPIKey, SawyerAuth
+from sawyer.provider.manager import PayoutSchedule, ProviderManager, ProviderStatus
 from sawyer.router.scheduler import ExpertScheduler
 from sawyer.storage.database import SawyerStorage
 from sawyer.token.budget import SubscriptionTier
@@ -25,12 +34,17 @@ from sawyer.token.budget import SubscriptionTier
 # ── App Factory ────────────────────────────────────────────────────
 
 _default_storage: SawyerStorage | None = None
+_default_provider_mgr: ProviderManager | None = None
 
 
-def create_app(storage: SawyerStorage | None = None) -> FastAPI:
+def create_app(
+    storage: SawyerStorage | None = None,
+    provider_mgr: ProviderManager | None = None,
+) -> FastAPI:
     """Create a FastAPI app with optional storage injection."""
-    global _default_storage
+    global _default_storage, _default_provider_mgr
     _default_storage = storage
+    _default_provider_mgr = provider_mgr
 
     api = FastAPI(
         title="Sawyer Dashboard",
@@ -46,6 +60,26 @@ def create_app(storage: SawyerStorage | None = None) -> FastAPI:
     api.add_api_route("/accounts", list_accounts, methods=["GET"])
     api.add_api_route("/accounts/{user_id}", get_account, methods=["GET"])
     api.add_api_route("/inference/history/{user_id}", inference_history, methods=["GET"])
+    api.add_api_route("/providers", list_providers, methods=["GET"])
+    api.add_api_route("/providers/{provider_id}", get_provider, methods=["GET"])
+    api.add_api_route("/providers/register", register_provider, methods=["POST"])
+    api.add_api_route(
+        "/providers/{provider_id}/onboarding",
+        start_onboarding,
+        methods=["POST"],
+    )
+    api.add_api_route(
+        "/providers/{provider_id}/verification",
+        check_verification,
+        methods=["GET"],
+    )
+    api.add_api_route(
+        "/providers/{provider_id}/payouts",
+        provider_payout_history,
+        methods=["GET"],
+    )
+    api.add_api_route("/providers/{provider_id}/payout", trigger_payout, methods=["POST"])
+    api.add_api_route("/providers/network/summary", network_summary, methods=["GET"])
     api.add_api_route("/stats", aggregate_stats, methods=["GET"])
     api.add_api_route("/audit", audit_log, methods=["GET"])
 
@@ -249,6 +283,199 @@ async def audit_log(
     """Query the audit log."""
     storage = _get_storage()
     return storage.query_audit(actor_id=actor_id, action=action, limit=limit)
+
+
+# ── Provider Routes ────────────────────────────────────────────────
+
+
+def _get_provider_mgr() -> ProviderManager:
+    """Get or create a ProviderManager instance."""
+    if _default_provider_mgr is not None:
+        return _default_provider_mgr
+    return ProviderManager(storage=_get_storage())
+
+
+async def list_providers(
+    status: str | None = None,
+    api_key=Depends(verify_api_key),
+) -> list[dict[str, Any]]:
+    """List all providers, optionally filtered by status."""
+    mgr = _get_provider_mgr()
+    provider_status = None
+    if status:
+        try:
+            provider_status = ProviderStatus(status)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid status: {status}") from None
+
+    providers = mgr.list_providers(status=provider_status)
+    return [
+        {
+            "provider_id": p.provider_id,
+            "display_name": p.display_name,
+            "email": p.email,
+            "status": p.status.value,
+            "country": p.country,
+            "nodes": len(p.node_ids),
+            "total_usd_earned": p.total_usd_earned,
+            "available_balance": p.available_balance,
+            "payout_schedule": p.payout_schedule.value,
+            "registered_at": p.registered_at,
+        }
+        for p in providers
+    ]
+
+
+async def get_provider(provider_id: str, api_key=Depends(verify_api_key)) -> dict[str, Any]:
+    """Get a provider's full details including earnings."""
+    mgr = _get_provider_mgr()
+    provider = mgr.get_provider(provider_id)
+    if provider is None:
+        raise HTTPException(status_code=404, detail=f"Provider {provider_id} not found")
+    return mgr.get_provider_summary(provider_id)
+
+
+async def register_provider(request: Request) -> dict[str, Any]:
+    """Register a new node provider."""
+    body = await request.json()
+    mgr = _get_provider_mgr()
+
+    email = body.get("email")
+    display_name = body.get("display_name")
+    if not email or not display_name:
+        raise HTTPException(status_code=400, detail="email and display_name are required")
+
+    # Check for duplicate email
+    existing = mgr.find_provider_by_email(email)
+    if existing:
+        raise HTTPException(status_code=409, detail=f"Provider already registered: {email}")
+
+    payout_schedule = PayoutSchedule.MONTHLY
+    if body.get("payout_schedule") == "quarterly":
+        payout_schedule = PayoutSchedule.QUARTERLY
+
+    provider = mgr.register(
+        email=email,
+        display_name=display_name,
+        legal_name=body.get("legal_name", ""),
+        phone=body.get("phone", ""),
+        country=body.get("country", "US"),
+        payout_schedule=payout_schedule,
+    )
+
+    return {
+        "provider_id": provider.provider_id,
+        "status": provider.status.value,
+        "message": "Provider registered. Complete Stripe Connect onboarding to start earning.",
+    }
+
+
+async def start_onboarding(provider_id: str, api_key=Depends(verify_api_key)) -> dict[str, Any]:
+    """Start Stripe Connect onboarding for a provider."""
+    mgr = _get_provider_mgr()
+    provider = mgr.get_provider(provider_id)
+    if provider is None:
+        raise HTTPException(status_code=404, detail=f"Provider {provider_id} not found")
+
+    # In production, this calls SawyerProviderStripe.create_connect_account()
+    # For now, mark as onboarding
+    provider.status = ProviderStatus.ONBOARDING
+    provider.updated_at = time.time()
+
+    return {
+        "provider_id": provider_id,
+        "status": provider.status.value,
+        "message": "Stripe Connect onboarding initiated. "
+        "Provider will receive an onboarding link via email.",
+        "next_step": "GET /providers/{provider_id}/verification to check status",
+    }
+
+
+async def check_verification(provider_id: str, api_key=Depends(verify_api_key)) -> dict[str, Any]:
+    """Check a provider's Stripe Connect verification status."""
+    mgr = _get_provider_mgr()
+    provider = mgr.get_provider(provider_id)
+    if provider is None:
+        raise HTTPException(status_code=404, detail=f"Provider {provider_id} not found")
+
+    return {
+        "provider_id": provider_id,
+        "status": provider.status.value,
+        "stripe_connected": bool(provider.stripe_connect_id),
+        "stripe_verified": provider.stripe_account_verified,
+        "tax_id_provided": provider.tax_id_provided,
+        "is_eligible_for_payout": provider.is_eligible_for_payout,
+        "available_balance": provider.available_balance,
+    }
+
+
+async def provider_payout_history(
+    provider_id: str,
+    limit: int = 50,
+    api_key=Depends(verify_api_key),
+) -> list[dict[str, Any]]:
+    """Get payout history for a provider."""
+    mgr = _get_provider_mgr()
+    provider = mgr.get_provider(provider_id)
+    if provider is None:
+        raise HTTPException(status_code=404, detail=f"Provider {provider_id} not found")
+
+    payouts = mgr.get_payout_history(provider_id, limit=limit)
+    return [
+        {
+            "payout_id": p.payout_id,
+            "amount_usd": p.amount_usd,
+            "status": p.status.value,
+            "period": p.period_label,
+            "tokens_in_period": p.tokens_in_period,
+            "created_at": p.created_at,
+            "paid_at": p.paid_at,
+        }
+        for p in payouts
+    ]
+
+
+async def trigger_payout(provider_id: str, api_key=Depends(verify_api_key)) -> dict[str, Any]:
+    """Trigger a payout for an eligible provider."""
+    mgr = _get_provider_mgr()
+    provider = mgr.get_provider(provider_id)
+    if provider is None:
+        raise HTTPException(status_code=404, detail=f"Provider {provider_id} not found")
+
+    if not provider.is_eligible_for_payout:
+        return {
+            "provider_id": provider_id,
+            "eligible": False,
+            "reason": (
+                f"Balance ${provider.available_balance:.2f} below "
+                f"minimum ${provider.min_payout_usd:.2f} or account not verified"
+            ),
+        }
+
+    payout = mgr.process_payout(provider_id)
+    if payout is None:
+        return {
+            "provider_id": provider_id,
+            "eligible": False,
+            "reason": "Could not process payout",
+        }
+
+    return {
+        "provider_id": provider_id,
+        "eligible": True,
+        "payout_id": payout.payout_id,
+        "amount_usd": payout.amount_usd,
+        "status": payout.status.value,
+        "period": payout.period_label,
+    }
+
+
+async def network_summary(
+    api_key=Depends(verify_api_key),
+) -> dict[str, Any]:
+    """Get network-wide provider statistics."""
+    mgr = _get_provider_mgr()
+    return mgr.get_network_summary()
 
 
 def serve(host: str = "0.0.0.0", port: int = 8080) -> None:

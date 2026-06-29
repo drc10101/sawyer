@@ -202,9 +202,11 @@ class ProviderManager:
 
         if self._storage:
             self._storage.append_audit(
-                actor_id=provider_id,
                 action="provider.register",
-                details=f"Registered provider {display_name} ({email})",
+                actor_id=provider_id,
+                target_id=provider_id,
+                silo="provider",
+                details={"display_name": display_name, "email": email},
             )
 
         logger.info(
@@ -448,9 +450,11 @@ class ProviderManager:
 
         if self._storage:
             self._storage.append_audit(
-                actor_id=provider_id,
                 action="provider.suspend",
-                details=reason or f"Suspended provider {provider_id}",
+                actor_id=provider_id,
+                target_id=provider_id,
+                silo="provider",
+                details={"reason": reason or "suspended"},
             )
 
         return provider

@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from sawyer.auth.api import SawyerAuth
 from sawyer.dashboard.server import create_app
+from sawyer.provider.manager import ProviderManager
 from sawyer.storage.database import SawyerStorage
 from sawyer.token.accounting import TokenAccountant
 from sawyer.token.budget import SubscriptionTier
@@ -20,6 +21,7 @@ def test_env():
     db_path = Path(tmpdir) / "test_dashboard.db"
     storage = SawyerStorage(str(db_path))
     auth = SawyerAuth(storage)
+    provider_mgr = ProviderManager(storage=storage)
     full_key, api_key_obj = auth.create_key(user_id="test-admin", tier="operator")
 
     # Create a test account
@@ -43,6 +45,7 @@ def test_env():
     yield {
         "storage": storage,
         "auth": auth,
+        "provider_mgr": provider_mgr,
         "api_key": full_key,
         "key_id": api_key_obj.key_id,
     }
@@ -52,8 +55,11 @@ def test_env():
 
 @pytest.fixture
 def client(test_env):
-    """Create a test client with injected storage."""
-    app = create_app(storage=test_env["storage"])
+    """Create a test client with injected storage and provider manager."""
+    app = create_app(
+        storage=test_env["storage"],
+        provider_mgr=test_env["provider_mgr"],
+    )
     return TestClient(app)
 
 
@@ -178,3 +184,153 @@ class TestDashboardAuth:
         """Health check doesn't require authentication."""
         response = client.get("/health")
         assert response.status_code == 200
+
+
+class TestDashboardProviders:
+    """Test provider endpoints."""
+
+    def test_register_provider(self, client):
+        """Register a new provider via API."""
+        response = client.post(
+            "/providers/register",
+            json={
+                "email": "provider@example.com",
+                "display_name": "Test Provider",
+                "legal_name": "Test Provider LLC",
+                "country": "US",
+                "payout_schedule": "monthly",
+            },
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["provider_id"].startswith("prov_")
+        assert data["status"] == "pending"
+
+    def test_register_provider_missing_fields(self, client):
+        """Register without required fields returns 400."""
+        response = client.post(
+            "/providers/register",
+            json={"display_name": "No Email"},
+        )
+        assert response.status_code == 400
+
+    def test_register_provider_duplicate_email(self, client):
+        """Registering same email twice returns 409."""
+        client.post(
+            "/providers/register",
+            json={
+                "email": "dup@example.com",
+                "display_name": "First",
+            },
+        )
+        response = client.post(
+            "/providers/register",
+            json={
+                "email": "dup@example.com",
+                "display_name": "Second",
+            },
+        )
+        assert response.status_code == 409
+
+    def test_list_providers(self, client, test_env):
+        """List providers returns registered providers."""
+        api_key = test_env["api_key"]
+        # Register a provider directly
+        test_env["provider_mgr"].register(email="list@example.com", display_name="ListTest")
+        response = client.get("/providers", headers={"X-API-Key": api_key})
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) >= 1
+
+    def test_get_provider(self, client, test_env):
+        """Get provider details."""
+        api_key = test_env["api_key"]
+        provider = test_env["provider_mgr"].register(
+            email="detail@example.com", display_name="DetailTest"
+        )
+        response = client.get(
+            f"/providers/{provider.provider_id}",
+            headers={"X-API-Key": api_key},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["provider_id"] == provider.provider_id
+        assert "earnings" in data
+
+    def test_get_provider_not_found(self, client, test_env):
+        """Get non-existent provider returns 404."""
+        api_key = test_env["api_key"]
+        response = client.get(
+            "/providers/prov_nonexistent",
+            headers={"X-API-Key": api_key},
+        )
+        assert response.status_code == 404
+
+    def test_start_onboarding(self, client, test_env):
+        """Start Stripe Connect onboarding."""
+        api_key = test_env["api_key"]
+        provider = test_env["provider_mgr"].register(
+            email="onboard@example.com", display_name="OnboardTest"
+        )
+        response = client.post(
+            f"/providers/{provider.provider_id}/onboarding",
+            headers={"X-API-Key": api_key},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "onboarding"
+
+    def test_check_verification(self, client, test_env):
+        """Check provider verification status."""
+        api_key = test_env["api_key"]
+        provider = test_env["provider_mgr"].register(
+            email="verify@example.com", display_name="VerifyTest"
+        )
+        response = client.get(
+            f"/providers/{provider.provider_id}/verification",
+            headers={"X-API-Key": api_key},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["stripe_verified"] is False
+
+    def test_payout_history(self, client, test_env):
+        """Get empty payout history for a provider."""
+        api_key = test_env["api_key"]
+        provider = test_env["provider_mgr"].register(
+            email="payout@example.com", display_name="PayoutTest"
+        )
+        response = client.get(
+            f"/providers/{provider.provider_id}/payouts",
+            headers={"X-API-Key": api_key},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, list)
+
+    def test_trigger_payout_insufficient(self, client, test_env):
+        """Trigger payout with insufficient balance."""
+        api_key = test_env["api_key"]
+        provider = test_env["provider_mgr"].register(
+            email="nopay@example.com", display_name="NoPayTest"
+        )
+        test_env["provider_mgr"].verify_provider(provider.provider_id, "acct_test")
+        response = client.post(
+            f"/providers/{provider.provider_id}/payout",
+            headers={"X-API-Key": api_key},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["eligible"] is False
+
+    def test_network_summary(self, client, test_env):
+        """Get network-wide provider stats."""
+        api_key = test_env["api_key"]
+        test_env["provider_mgr"].register(email="net@example.com", display_name="NetTest")
+        response = client.get(
+            "/providers/network/summary",
+            headers={"X-API-Key": api_key},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_providers"] >= 1
