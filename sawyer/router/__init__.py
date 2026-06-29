@@ -1,7 +1,7 @@
 """Sawyer Router package — expert routing, scheduling, aggregation."""
 
 from sawyer.router.gateway import SawyerGateway
-from sawyer.router.scheduler import ExpertScheduler
+from sawyer.router.scheduler import ExpertScheduler, RoutingStrategy
 from sawyer.router.server import (
     SawyerNodeServicer,
     SawyerRouterServicer,
@@ -12,6 +12,7 @@ from sawyer.router.server import (
 __all__ = [
     "SawyerGateway",
     "ExpertScheduler",
+    "RoutingStrategy",
     "SawyerRouterServicer",
     "SawyerNodeServicer",
     "serve_router",
