@@ -1,5 +1,12 @@
 """Sawyer Token package — subscription tiers, budgets, accounting, and Stripe."""
 
+from sawyer.token.accounting import (
+    AccountingError,
+    InferenceRecord,
+    InsufficientTokens,
+    TokenAccountant,
+    UserAccount,
+)
 from sawyer.token.budget import (
     MAX_ROLLOVER,
     TIER_PRICING,
@@ -17,6 +24,11 @@ __all__ = [
     "MAX_ROLLOVER",
     "TokenBalance",
     "HostEarnings",
+    "AccountingError",
+    "InsufficientTokens",
+    "InferenceRecord",
+    "TokenAccountant",
+    "UserAccount",
     "SawyerStripe",
     "SawyerSubscription",
 ]
