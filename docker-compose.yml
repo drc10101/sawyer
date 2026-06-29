@@ -1,0 +1,53 @@
+version: "3.9"
+
+services:
+  # ── Sawyer Router ──────────────────────────────────────────────
+  router:
+    build:
+      context: .
+      target: router
+    ports:
+      - "50051:50051"  # gRPC
+      - "8080:8080"    # Dashboard
+    environment:
+      - SAWYER_DATABASE_URL=/data/sawyer.db
+      - SAWYER_NODE_NAME=sawyer-router-1
+      - SAWYER_ROUTING_STRATEGY=ADAPTIVE
+    volumes:
+      - router-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8080/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ── Sawyer Node ────────────────────────────────────────────────
+  node:
+    build:
+      context: .
+      target: node
+    depends_on:
+      router:
+        condition: service_healthy
+    environment:
+      - SAWYER_ROUTER_URL=router:50051
+      - SAWYER_NODE_NAME=sawyer-node-1
+      - SAWYER_MAX_EXPERTS=2
+    volumes:
+      - model-cache:/root/.sawyer/cache
+      - expert-data:/root/.sawyer/experts
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+
+volumes:
+  router-data:
+  model-cache:
+  expert-data:
