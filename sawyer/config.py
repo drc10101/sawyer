@@ -23,6 +23,7 @@ class SawyerConfig:
     api_key: str | None = None
 
     # Expert hosting
+    cache_dir: str = "~/.sawyer/cache"
     expert_cache_dir: str = "~/.sawyer/experts"
     max_experts: int = 2  # Max experts to host concurrently
     max_vram_gb: float | None = None  # Auto-detect if None
