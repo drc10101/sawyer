@@ -1,4 +1,4 @@
-"""Sawyer Token package — subscription tiers, budgets, and accounting."""
+"""Sawyer Token package — subscription tiers, budgets, accounting, and Stripe."""
 
 from sawyer.token.budget import (
     MAX_ROLLOVER,
@@ -8,6 +8,7 @@ from sawyer.token.budget import (
     SubscriptionTier,
     TokenBalance,
 )
+from sawyer.token.stripe import SawyerStripe, SawyerSubscription
 
 __all__ = [
     "SubscriptionTier",
@@ -16,4 +17,6 @@ __all__ = [
     "MAX_ROLLOVER",
     "TokenBalance",
     "HostEarnings",
+    "SawyerStripe",
+    "SawyerSubscription",
 ]
