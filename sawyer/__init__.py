@@ -16,7 +16,7 @@ routing, and a tamper-evident audit chain.
 SPDX-License-Identifier: BSL-1.1 — See LICENSE for details.
 """
 
-__version__ = "0.1.2"
+__version__ = "0.1.3"
 __author__ = "InFill Systems, LLC"
 
 from sawyer.server import SawyerServer

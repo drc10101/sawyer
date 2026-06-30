@@ -218,6 +218,16 @@ sawyer serve                # if Python Scripts is on PATH
 python -m sawyer serve      # works everywhere, no PATH needed
 ```
 
+### One-Click Install (Windows)
+
+Double-click `sawyer.bat` in the repo, or run the PowerShell installer for a desktop shortcut and Start Menu entry:
+
+```powershell
+irm https://infill.systems/install/sawyer.ps1 | iex
+```
+
+To uninstall: `.\install_sawyer.ps1 -Uninstall`
+
 ## Dependencies
 
 - **Bedrock** (infill-bedrock): Node identity, consent tokens, audit chain
