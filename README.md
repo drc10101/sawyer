@@ -1,3 +1,5 @@
+[![PyPI](https://img.shields.io/pypi/v/sawyer-core?color=%2312c7ef&label=pypi%3A%20sawyer-core)](https://pypi.org/project/sawyer-core/)
+
 # Sawyer — Distributed MoE Inference Network
 
 > **Status: Active prototype** — Provider onboarding and APIs are evolving. Sawyer is under active development toward an alpha milestone.
