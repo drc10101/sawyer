@@ -187,16 +187,26 @@ sawyer/
 
 ## Installation
 
+**Requires Python 3.11 or later.**
+
 ```bash
 pip install sawyer-core
 ```
+
+For GPU inference (hosting expert nodes):
+
+```bash
+pip install sawyer-core[inference]
+```
+
+Note: `vllm` and `llama-cpp-python` require CUDA and a C++ compiler. If installation fails, install them separately following their docs, then install sawyer-core without extras.
 
 Or install from source for development:
 
 ```bash
 git clone https://github.com/drc10101/sawyer.git
 cd sawyer
-pip install -e .
+pip install -e ".[dev]"
 ```
 
 ## Dependencies
