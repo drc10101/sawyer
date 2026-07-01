@@ -14,43 +14,169 @@ Named for Tom Sawyer, who turned an impossible chore into a community effort by 
 
 Built on [Bedrock](https://github.com/drc10101/bedrock) for node identity, consent-gated routing, and auditability. Sawyer runs on Bedrock. Sawyer does not own Bedrock.
 
-## The Problem
+---
 
-Cloud API credits run out. A single model call on GPT-4-class inference costs cents that compound into hundreds of dollars. Frontier quantized models (Mixtral 8x7B, DeepSeek-V2, Qwen MoE) can run locally but require 2-4 GPUs for full precision. Most developers have one GPU — or none.
+## Use Cases
 
-## The Idea
+### For the Developer with a Laptop
 
-A distributed network where:
+You're building an app that calls LLM APIs. GPT-4 costs $0.03/1K tokens. Claude Haiku is cheaper but still adds up. Sawyer gives you 500K tokens for $5/mo — roughly $0.01/1K tokens — with chat and code models available from day one.
 
-1. **Volunteers host MoE expert weights** on their hardware (a single RTX 3090 can host one expert)
-2. **A router activates only the relevant experts per token** (MoE sparsity — only 2 of 8 experts fire on Mixtral)
-3. **Users pay $5/month** for a token budget — cheap enough to experiment, paid enough to sustain
-4. **Hosts earn a share** proportional to compute contributed — the incentive altruism alone can't provide
-5. **Bedrock provides the trust layer** — node identity, consent tokens, audit chain
+```bash
+pip install sawyer-core
+sawyer chat                    # Interactive chat UI
+sawyer chat --model mixtral   # Pick a model
+```
 
-## Why It Works
+No GPU required. Your laptop connects to the network and inference happens on nodes that have the hardware. You just type.
 
-- **MoE is more distributable than dense inference.** Experts are independent sub-networks. Unlike tensor parallelism (which splits a single matrix across GPUs), each expert runs its own forward pass. MoE is more distributable than dense tensor-parallel inference because experts are independently activated, but Sawyer's core engineering challenge is keeping routing, expert execution, and aggregation fast enough to feel local.
-- **Sparsity means efficiency.** Only ~25% of parameters activate per token on Mixtral. The network doesn't pay for dormant compute.
-- **Quantized models fit on consumer hardware.** Q4_K_M Mixtral expert ≈ 1.5GB. A 3090 can host 2-3 experts comfortably alongside other workloads.
-- **$5/mo is the sweet spot.** Below the psychological barrier of "another subscription." Enough tokens to prototype, test, and run real workloads. Revenue sustains the network without extracting from users.
+### For the Gamer with a 4090
+
+Your gaming rig sits idle most of the day. Sawyer puts those GPUs to work. You host expert weights and serve inference to the network. The more you contribute, the more you earn — your 4090 on Tier 4 earns 4x what a laptop on Tier 1 earns per token.
+
+```bash
+pip install sawyer-core
+sawyer serve                   # Host experts, start earning
+sawyer serve --model mixtral  # Pick a model to serve
+sawyer status                  # Check your earnings
+```
+
+Tier 4 (24GB+ VRAM) can host any model's experts. Tier 1 (4GB) can still participate with Qwen1.5-MoE experts. Everyone earns.
+
+### For the Small Team
+
+Your startup needs inference but can't justify GPU costs. Subscribe at the Builder tier ($20/mo, 2M tokens) and route all your calls through Sawyer. Your inference cost drops by 3-6x compared to major API providers. No rate limits, no surprise bills.
+
+### For the Hobbyist
+
+You want to experiment with local models but only have one GPU. Sawyer lets you download experts, serve them locally or to the network, and use the chat client to interact. Free tier with 50K tokens to start, or subscribe for more.
+
+---
+
+## How You Earn
+
+Sawyer is not volunteer computing. You get paid for the compute you contribute.
+
+### The Pool
+
+Every quarter, 70% of all subscription revenue goes into the provider pool:
+
+```
+Provider Pool = Total Subscribers x $5/month x 3 months x 70%
+```
+
+With 100 subscribers:
+- Revenue: $1,500/quarter
+- Provider pool: $1,050
+- Platform: $450
+
+With 1,000 subscribers:
+- Revenue: $15,000/quarter
+- Provider pool: $10,500
+- Platform: $4,500
+
+The pool grows as the network grows. More subscribers means more money for everyone.
+
+### Distribution
+
+The pool is split two ways:
+
+| Share | What | Why |
+|-------|------|-----|
+| 90% | Throughput | Tokens served x tier multiplier — the work you do |
+| 10% | Uptime | Just being available matters, even if traffic is low |
+
+### Hardware Tiers
+
+Your earnings depend on what you bring to the network. A 4090 earns more per token than a 1060 because it can host larger, more valuable experts.
+
+| Tier | VRAM | Multiplier | Can Host | Monthly Estimate* |
+|------|------|-----------|----------|-------------------|
+| Tier 1 | 4 GB | 1x | Qwen1.5-MoE experts (0.5 GB) | $5-15 |
+| Tier 2 | 8 GB | 2x | + DeepSeek-V2 experts (0.8 GB) | $15-40 |
+| Tier 3 | 12 GB | 3x | + Mixtral experts (1.5 GB) | $30-80 |
+| Tier 4 | 24 GB+ | 4x | All experts, local models | $60-200+ |
+
+*Estimates based on 100 subscribers, varies with network size and utilization.
+
+**Same 100K tokens served:**
+- Tier 1 laptop: 100K x 1x = 100K weighted
+- Tier 4 monster: 100K x 4x = 400K weighted
+
+The monster PC earns 4x for the same token count because it invested in hardware that can do more for the network.
+
+### Example: The Kid with the Monster PC
+
+100 subscribers, one quarter:
+
+| Provider | Tokens | Uptime | Tier | Weighted | Token Earnings | Uptime Earnings | Total |
+|----------|--------|--------|------|----------|---------------|----------------|-------|
+| Monster PC (4090) | 500K | 720h | Tier 4 (4x) | 2,000,000 | $893 | $35 | **$928** |
+| Gaming rig (3060) | 200K | 500h | Tier 3 (3x) | 600,000 | $268 | $24 | **$292** |
+| Midrange (1060) | 50K | 300h | Tier 1 (1x) | 50,000 | $22 | $15 | **$37** |
+
+The kid with the 4090 doing most of the work gets the biggest slice. That's the point.
+
+### Payouts
+
+- Quarterly: January-March, April-June, July-September, October-December
+- Minimum payout: $25. Below that, your earnings roll over to next quarter
+- Methods: Stripe Connect (primary), PayPal
+- Failed payouts roll over — nobody loses money
+
+---
+
+## Pricing
+
+| Tier | Price | Tokens | Per 1K Tokens | Best For |
+|------|-------|--------|---------------|----------|
+| Explorer | $5/mo | 500K | $0.01 | Prototyping, experimentation |
+| Builder | $20/mo | 2M | $0.01 | Development, testing |
+| Operator | $50/mo | 5M | $0.01 | Production workloads |
+
+~3-6x cheaper than GPT-4, roughly in line with Claude Haiku pricing. No rate limits. No surprise bills. Token budget resets monthly, unused tokens roll over (max 1 month).
+
+---
+
+## Supported Models
+
+Use `sawyer models` to list available models, or filter by use case:
+
+```bash
+sawyer models              # All models
+sawyer models --use chat   # Chat-focused models
+sawyer models --use code   # Code-focused models
+```
+
+| Model | Params | Experts | Active/Token | Q4 Size | Expert Size | Best For |
+|-------|--------|---------|-------------|---------|-------------|----------|
+| Mixtral 8x7B | 46.7B | 8 | 2 | ~24 GB | ~1.5 GB | Chat, Code |
+| DeepSeek-V2 Lite | 15.7B | 64 | 6 | ~9 GB | ~0.8 GB | Chat |
+| Qwen1.5-MoE | 14.3B | 60 | 4 | ~7 GB | ~0.5 GB | Chat (lightweight) |
+| DBRX Instruct | 132B | 16 | 4 | ~65 GB | ~2.5 GB | Code |
+
+---
 
 ## Architecture
 
 ```
 [User/Client]
-     │
-     ▼
-[Sawyer Router]  ←── Bedrock identity, consent-gated routing
-     │
-     ├──→ [Node: Expert 0]  (RTX 3090, Dallas)
-     ├──→ [Node: Expert 2]  (A100, Frankfurt)
-     ├──→ [Node: Expert 5]  (M2 Max, Tokyo)
-     └──→ [Node: Expert 7]  (T4, São Paulo)
-     │
-     ▼
-[Aggregated Output] → User
+     |
+     v
+[Sawyer Router]  <-- Bedrock identity, consent-gated routing
+     |
+     +--> [Node: Expert 0]  (RTX 4090, Dallas)     Tier 4 - 4x earnings
+     +--> [Node: Expert 2]  (A100, Frankfurt)       Tier 4 - 4x earnings
+     +--> [Node: Expert 5]  (RTX 3060, Tokyo)       Tier 3 - 3x earnings
+     +--> [Node: Expert 7]  (GTX 1060, Sao Paulo)   Tier 1 - 1x earnings
+     |
+     v
+[Aggregated Output] --> User
 ```
+
+Every node earns proportional to its hardware contribution. The 4090 in Dallas earns 4x per token because it can host the experts the network needs most.
+
+---
 
 ## Core Modules
 
@@ -68,122 +194,59 @@ A distributed network where:
 - Reports health and throughput to the router
 
 ### 3. `sawyer/token/` — Token Economics
-- $5/mo subscription grants a token budget (e.g., 500K tokens)
+- $5/mo subscription grants 500K tokens
 - Tokens debit per inference request (input + output tokens)
 - Token budget resets monthly, rolls over unused tokens (max 1 month)
-- Hosts earn credits proportional to tokens served
-- Credits convert to USD payout at thresholds ($10 minimum)
+- Provider pool = subscribers x $5 x months x 70%
+- 90% distributed by weighted throughput, 10% by uptime
+- Quarterly payouts, $25 minimum, rollover below threshold
 
-### 4. `sawyer/identity/` — Bedrock Integration
+### 4. `sawyer/provider/` — Provider Economics
+- **Node Tiers**: 4 hardware tiers (4GB/8GB/12GB/24GB+) with 1x-4x earnings multipliers
+- **Revenue Pool**: 70% of subscription revenue distributed to providers quarterly
+- **Quarterly Payout**: Pool split by weighted contribution, $25 minimum, Stripe/PayPal
+- **Rollover**: Below-threshold earnings carry forward — nobody loses money
+
+### 5. `sawyer/identity/` — Bedrock Integration
 - Every node holds a Bedrock cryptographic identity
 - Router verifies node certificates before routing
 - Consent tokens gate which models a node will serve
 - Audit chain logs every inference request for compliance
 
-### 5. `sawyer/model/` — Model Registry
-- Catalog of supported MoE models and their expert layouts
+### 6. `sawyer/model/` — Model Registry
+- Catalog of supported MoE models tagged by use case (chat, code)
 - Expert weight files versioned and checksummed
 - Nodes download experts on registration or on-demand
-- Supports Mixtral 8x7B, DeepSeek-V2, Qwen MoE, and extensible for new models
+- Supports Mixtral 8x7B, DeepSeek-V2, Qwen MoE, DBRX
+
+---
 
 ## Protocol
 
 ```
 1. Node registers with Sawyer network
-   → Bedrock identity issued (certificate, scope, audit chain)
-   → Node advertises: GPU, VRAM, bandwidth, experts available
+   --> Bedrock identity issued (certificate, scope, audit chain)
+   --> Node advertises: GPU, VRAM, bandwidth, experts available
+   --> Tier classification: Tier 1-4 based on VRAM
 
 2. User sends inference request
-   → Sawyer router authenticates user (token balance check)
-   → Router runs gating network locally to select experts
-   → Router sends expert activation request to node(s)
-   → Node validates consent token, runs expert forward pass
-   → Node returns expert output, logs to audit chain
-   → Router aggregates, returns to user
-   → Token balance debited
+   --> Sawyer router authenticates user (token balance check)
+   --> Router runs gating network locally to select experts
+   --> Router sends expert activation request to node(s)
+   --> Node validates consent token, runs expert forward pass
+   --> Node returns expert output, logs to audit chain
+   --> Router aggregates, returns to user
+   --> Token balance debited
 
-3. Monthly settlement
-   → Host credits calculated from tokens served
-   → Payouts processed at $10 threshold
+3. Quarterly settlement
+   --> Provider pool = subscribers x $5 x 3 months x 70%
+   --> 90% distributed by weighted throughput (tokens x tier multiplier)
+   --> 10% distributed by uptime
+   --> Payouts >= $25 via Stripe Connect
+   --> Below $25 rolls over to next quarter
 ```
 
-## Pricing
-
-| Tier | Price | Token Budget | Use Case |
-|------|-------|-------------|----------|
-| Explorer | $5/mo | 500K tokens | Prototyping, experimentation |
-| Builder | $20/mo | 2M tokens | Development, testing |
-| Operator | $50/mo | 5M tokens | Production workloads |
-
-Token costs vary by model (frontier models cost more tokens per request). Quantized models get a token discount (lower quality, lower cost).
-
-## Host Economics
-
-- Earn credits per token of expert inference served
-- Credits proportional to: tokens served × model complexity × response time SLA
-- Payout at $10 threshold via Stripe
-- A single RTX 3090 hosting 2 Mixtral experts at ~30% utilization: estimated $8-15/mo
-
-## Supported Models (Initial)
-
-| Model | Params | Experts | Active/Token | Q4_K_M Size | Expert Size |
-|-------|--------|---------|-------------|-------------|-------------|
-| Mixtral 8x7B | 46.7B | 8 | 2 | ~24GB | ~1.5GB |
-| DeepSeek-V2 Lite | 15.7B | 64 (shared) | 6 | ~9GB | varies |
-| Qwen1.5-MoE-A2.7B | 14.3B | 60 | 4 | ~7GB | varies |
-| DBRX | 132B | 16 | 4 | ~65GB | ~2.5GB |
-
-## Repository Structure
-
-```
-sawyer/
-├── README.md
-├── LICENSE                  # BSL-1.1 (same as Bedrock)
-├── pyproject.toml
-├── sawyer/
-│   ├── __init__.py
-│   ├── cli.py               # sawyer register, sawyer serve, sawyer status
-│   ├── router/
-│   │   ├── __init__.py
-│   │   ├── gateway.py       # Main router server (gRPC/QUIC)
-│   │   ├── scheduler.py     # Expert selection, load balancing
-│   │   ├── gating.py        # Model-specific gating network runner
-│   │   └── aggregator.py    # Combine expert outputs
-│   ├── node/
-│   │   ├── __init__.py
-│   │   ├── agent.py         # Node agent — hosts experts, serves inference
-│   │   ├── registry.py      # Register capabilities, download experts
-│   │   ├── inference.py     # Expert forward pass (vLLM / llama.cpp)
-│   │   └── health.py        # Heartbeat, throughput reporting
-│   ├── token/
-│   │   ├── __init__.py
-│   │   ├── budget.py        # Token budget management
-│   │   ├── accounting.py    # Debit/credit per request
-│   │   └── settlement.py    # Host payouts, Stripe integration
-│   ├── identity/
-│   │   ├── __init__.py
-│   │   ├── bedrock.py       # Bedrock SDK integration (identity, consent, audit)
-│   │   └── verification.py  # Node certificate verification
-│   ├── model/
-│   │   ├── __init__.py
-│   │   ├── registry.py      # Model catalog, expert layouts
-│   │   ├── download.py      # Expert weight distribution
-│   │   └── formats.py       # GGUF, safetensors handling
-│   └── config.py            # Configuration management
-├── tests/
-│   ├── test_router.py
-│   ├── test_node.py
-│   ├── test_token.py
-│   ├── test_identity.py
-│   └── test_model.py
-├── docs/
-│   ├── ARCHITECTURE.md
-│   ├── HOSTING.md           # How to host an expert node
-│   ├── MODELS.md            # Supported models and expert layouts
-│   └── TOKEN_ECONOMICS.md   # Detailed token economics
-└── site/
-    └── index.html           # Landing page
-```
+---
 
 ## Installation
 
@@ -228,6 +291,18 @@ irm https://infill.systems/install/sawyer.ps1 | iex
 
 To uninstall: `.\install_sawyer.ps1 -Uninstall`
 
+---
+
+## Why It Works
+
+- **MoE is more distributable than dense inference.** Experts are independent sub-networks. Unlike tensor parallelism (which splits a single matrix across GPUs), each expert runs its own forward pass. MoE is more distributable than dense tensor-parallel inference because experts are independently activated, but Sawyer's core engineering challenge is keeping routing, expert execution, and aggregation fast enough to feel local.
+- **Sparsity means efficiency.** Only ~25% of parameters activate per token on Mixtral. The network doesn't pay for dormant compute.
+- **Quantized models fit on consumer hardware.** Q4_K_M Mixtral expert ~1.5GB. A 3090 can host 2-3 experts comfortably alongside other workloads.
+- **$5/mo is the sweet spot.** Below the psychological barrier of "another subscription." Enough tokens to prototype, test, and run real workloads. Revenue sustains the network without extracting from users.
+- **Hardware investment is rewarded.** Tier 4 (24GB+) earns 4x per token compared to Tier 1 (4GB). Your 4090 pays for itself.
+
+---
+
 ## Dependencies
 
 - **Bedrock** (infill-bedrock): Node identity, consent tokens, audit chain
@@ -242,4 +317,4 @@ BSL-1.1 — free for non-production use. Production use requires a paid license.
 
 ---
 
-**Alpha milestone:** Single-router, two-node demo with one toy MoE model — real node registration, real health checks, real routing logs, fake economics. Prove the network behavior first, then graduate to larger quantized MoE weights.
+**Alpha milestone:** Single-router, two-node demo with one toy MoE model — real node registration, real health checks, real routing logs, real tier-weighted earnings. Prove the network behavior first, then graduate to larger quantized MoE weights.
