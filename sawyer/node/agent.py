@@ -1,14 +1,17 @@
 """Sawyer Node Agent — hosts experts, serves inference, reports health.
 
 Connects to the Sawyer router via gRPC, loads expert weights, and serves
-inference requests routed by the gateway.
+inference requests routed by the gateway. The ExpertServer handles the
+actual inference lifecycle; this module handles registration, heartbeat,
+and coordination.
 """
 
 import logging
 import time
-from dataclasses import dataclass, field
 
 from sawyer.config import SawyerConfig
+from sawyer.node.expert_server import ExpertServer, HealthReport
+from sawyer.node.inference import LlamaCppBackend
 from sawyer.proto import sawyer_pb2
 from sawyer.router.client import RouterClient
 from sawyer.router.server import SawyerNodeServicer
@@ -16,31 +19,21 @@ from sawyer.router.server import SawyerNodeServicer
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class ExpertSlot:
-    """An expert loaded into a node's VRAM."""
-
-    model_name: str
-    expert_id: int
-    loaded_at: float = field(default_factory=time.time)
-    inference_count: int = 0
-    vram_bytes: int = 0
-
-
 class SawyerNode:
     """Sawyer node agent.
 
-    Registers with the network via Bedrock identity, downloads and hosts
-    expert weights, serves inference requests, and reports health to the router.
+    Registers with the network via Bedrock identity, delegates expert
+    management to ExpertServer, and reports health to the router.
     """
 
-    def __init__(self, config: SawyerConfig) -> None:
-        self.config = config
+    def __init__(self, config: SawyerConfig | None = None) -> None:
+        self.config = config or SawyerConfig()
         self.node_id: str | None = None
-        self.experts: dict[str, ExpertSlot] = {}  # key: "model:expert_id"
+        self.expert_server = ExpertServer(self.config)
         self._running = False
         self._router_client: RouterClient | None = None
         self._node_server: SawyerNodeServicer | None = None
+        self._last_heartbeat: float = 0.0
 
     async def register(self, name: str | None = None) -> str:
         """Register this node with the Sawyer network via gRPC.
@@ -75,6 +68,10 @@ class SawyerNode:
             region="us-east-1",
         )
 
+        # Set node ID and GPU info on expert server
+        self.expert_server.set_node_id(self.node_id)
+        self.expert_server.set_gpu_info(gpu_name, vram_bytes)
+
         # Start local node server for the router to call
         self._node_server = SawyerNodeServicer(self.config)
 
@@ -86,86 +83,84 @@ class SawyerNode:
     ) -> None:
         """Download and load an expert weight file into VRAM.
 
-        Args:
-            model_name: Model identifier (e.g., "mixtral-8x7b")
-            expert_id: Expert number within the model
-            weight_url: URL to download the weight file from
-            weight_checksum: SHA-256 checksum for verification
+        Delegates to ExpertServer.load_expert().
         """
-        key = f"{model_name}:{expert_id}"
-        if key in self.experts:
-            logger.info("Expert %s already loaded", key)
-            return
-
-        logger.info("Loading expert %s from %s...", key, weight_url or "local cache")
-
-        # TODO: Download from weight_url, verify checksum, load into inference backend
-        # For now, record the slot
-        from sawyer.model.registry import get_model
-
-        model = get_model(model_name)
-        self.experts[key] = ExpertSlot(
+        await self.expert_server.load_expert(
             model_name=model_name,
             expert_id=expert_id,
-            vram_bytes=int(model.expert_size_gb_q4 * 1024**3),
+            weight_url=weight_url or None,
+            weight_checksum=weight_checksum,
         )
-        logger.info("Expert %s loaded successfully (%.1f GB)", key, model.expert_size_gb_q4)
 
     async def unload_expert(self, model_name: str, expert_id: int) -> None:
-        """Unload an expert from VRAM."""
-        key = f"{model_name}:{expert_id}"
-        if key in self.experts:
-            del self.experts[key]
-            logger.info("Unloaded expert %s", key)
+        """Unload an expert from VRAM.
 
-    async def serve_request(self, model_name: str, expert_id: int, tokens: list) -> dict:
+        Delegates to ExpertServer.unload_expert().
+        """
+        await self.expert_server.unload_expert(model_name, expert_id)
+
+    async def serve_request(self, model_name: str, expert_id: int, prompt: str, **kwargs) -> dict:
         """Run inference on a single expert.
+
+        Delegates to ExpertServer.forward_pass().
 
         Args:
             model_name: Model identifier
             expert_id: Expert number
-            tokens: Input token embeddings
+            prompt: Input text prompt
+            **kwargs: Additional inference parameters (max_tokens, temperature, etc.)
 
         Returns:
-            Expert output tensor (placeholder)
+            Dict with inference result
         """
-        key = f"{model_name}:{expert_id}"
-        if key not in self.experts:
-            raise ValueError(f"Expert {key} not loaded on this node")
-
-        slot = self.experts[key]
-        slot.inference_count += 1
-
-        logger.info("Serving expert %s (inference #%d)", key, slot.inference_count)
-
-        # TODO: Forward pass through the expert via inference backend
+        result = await self.expert_server.forward_pass(
+            model_name=model_name,
+            expert_id=expert_id,
+            prompt=prompt,
+            request_id=kwargs.pop("request_id", ""),
+            **kwargs,
+        )
         return {
             "expert_id": expert_id,
             "model": model_name,
-            "output": "placeholder_tensor",
+            "text": result.text,
+            "input_tokens": result.input_tokens,
+            "output_tokens": result.output_tokens,
+            "latency_ms": result.latency_ms,
             "node_id": self.node_id,
         }
 
-    async def heartbeat(self) -> None:
-        """Send heartbeat to the router with current node status."""
+    async def heartbeat(self) -> HealthReport:
+        """Send a health report to the router.
+
+        Returns:
+            The HealthReport that was sent.
+        """
+        report = self.expert_server.health_report()
+        self._last_heartbeat = time.time()
+
         if not self._router_client:
-            return
+            logger.warning("Cannot send heartbeat: no router connection")
+            return report
 
-        total_vram = int(self.config.max_vram_gb * 1024**3) if self.config.max_vram_gb else 0
-        used_vram = sum(s.vram_bytes for s in self.experts.values())
-        total_inferences = sum(s.inference_count for s in self.experts.values())
-
+        # Convert HealthReport to gRPC NodeStatus
         status = sawyer_pb2.NodeStatus(
             cpu_usage=0.0,
             gpu_usage=0.0,
-            vram_used_bytes=used_vram,
-            vram_total_bytes=total_vram,
-            active_requests=0,
-            total_inferences=total_inferences,
-            avg_latency_ms=10.0,
+            vram_used_bytes=report.vram_used_bytes,
+            vram_total_bytes=report.vram_total_bytes,
+            active_requests=report.active_requests,
+            total_inferences=report.total_inferences,
+            avg_latency_ms=report.avg_latency_ms,
         )
 
         self._router_client.heartbeat(status=status)
+        logger.debug(
+            "Heartbeat sent: %d experts ready, %d inferences, %.1fms avg latency",
+            report.experts_ready, report.total_inferences, report.avg_latency_ms,
+        )
+
+        return report
 
     async def start(self, offline: bool = False) -> None:
         """Start the node agent — register and begin serving.
@@ -178,6 +173,7 @@ class SawyerNode:
         if offline:
             logger.info("Running in offline mode — no router connection")
             self.node_id = "offline"
+            self.expert_server.set_node_id(self.node_id)
         else:
             await self.register()
 
@@ -185,6 +181,10 @@ class SawyerNode:
         """Stop the node agent — deregister and clean up."""
         logger.info("Stopping Sawyer Node Agent")
         self._running = False
+
+        # Gracefully shut down expert server
+        await self.expert_server.shutdown()
+
         if self._router_client:
             self._router_client.deregister()
             self._router_client.close()

@@ -275,7 +275,7 @@ class TestSawyerNode:
 
     def test_init(self):
         assert self.node.node_id is None
-        assert len(self.node.experts) == 0
+        assert len(self.node.expert_server.experts) == 0
 
     @pytest.mark.asyncio
     async def test_register(self):
@@ -297,19 +297,19 @@ class TestSawyerNode:
     @pytest.mark.asyncio
     async def test_load_expert(self):
         await self.node.load_expert("mixtral-8x7b", 0)
-        assert "mixtral-8x7b:0" in self.node.experts
+        assert "mixtral-8x7b:0" in self.node.expert_server.experts
 
     @pytest.mark.asyncio
     async def test_load_expert_idempotent(self):
         await self.node.load_expert("mixtral-8x7b", 0)
         await self.node.load_expert("mixtral-8x7b", 0)  # Should not duplicate
-        assert len(self.node.experts) == 1
+        assert len(self.node.expert_server.experts) == 1
 
     @pytest.mark.asyncio
     async def test_unload_expert(self):
         await self.node.load_expert("mixtral-8x7b", 0)
         await self.node.unload_expert("mixtral-8x7b", 0)
-        assert "mixtral-8x7b:0" not in self.node.experts
+        assert "mixtral-8x7b:0" not in self.node.expert_server.experts
 
 
 # ── Token Economics ──
