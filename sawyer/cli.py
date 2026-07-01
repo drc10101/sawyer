@@ -99,6 +99,28 @@ def cmd_serve(args) -> int:
     return 0
 
 
+def cmd_chat(args) -> int:
+    """Start the consumer chat client — web UI + OpenAI-compatible API.
+
+    This is what the user with the 8GB laptop runs. Opens a web UI at
+    localhost:8000 where they can chat with Sawyer-powered models.
+    Also provides an OpenAI-compatible API so any tool (curl, OpenAI SDK,
+    Ollama clients) can point at it.
+    """
+    from sawyer.client import serve_client
+
+    print()
+    print("  Sawyer — Distributed MoE Inference")
+    print("  Cheaper than your provider. The load is split, friends help.")
+    print()
+
+    try:
+        serve_client(host=args.host, port=args.port)
+    except KeyboardInterrupt:
+        print("\n  Shutting down...")
+    return 0
+
+
 def cmd_status(args) -> int:
     """Show network status and token balance."""
     config = SawyerConfig()
@@ -500,7 +522,7 @@ def main() -> int:
         "--port",
         type=int,
         default=8444,
-        help="Port for inference server",
+        help="Inference port (default: 8444)",
     )
     serve_parser.add_argument(
         "--router",
@@ -522,6 +544,23 @@ def main() -> int:
         "--offline",
         action="store_true",
         help="Start in offline mode (no router connection)",
+    )
+
+    # chat
+    chat_parser = subparsers.add_parser(
+        "chat",
+        help="Start the consumer chat client (web UI + OpenAI-compatible API)",
+    )
+    chat_parser.add_argument(
+        "--host",
+        default="localhost",
+        help="Host to bind to (default: localhost)",
+    )
+    chat_parser.add_argument(
+        "--port",
+        type=int,
+        default=8000,
+        help="Port to serve on (default: 8000)",
     )
 
     # status
@@ -637,6 +676,7 @@ def main() -> int:
     commands = {
         "register": cmd_register,
         "serve": cmd_serve,
+        "chat": cmd_chat,
         "status": cmd_status,
         "models": cmd_models,
         "download": cmd_download,
