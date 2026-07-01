@@ -52,14 +52,14 @@ class TestInferencePipeline:
         pipeline.set_token_balance("alice", alice_balance)
         assert pipeline.get_user_balance("alice") is alice_balance
 
-    def test_get_or_create_balance(self, pipeline):
-        balance = pipeline.get_or_create_balance("bob", "builder")
-        assert balance.tier == SubscriptionTier.BUILDER
-        assert balance.current_balance == 2_000_000
+    def test_get_or_create_account(self, pipeline):
+        account = pipeline.get_or_create_account("bob", "builder")
+        assert account.tier == SubscriptionTier.BUILDER
+        assert account.balance.current_balance == 2_000_000
 
-        # Second call returns same balance
-        same_balance = pipeline.get_or_create_balance("bob")
-        assert same_balance is balance
+        # Second call returns same account
+        same_account = pipeline.get_or_create_account("bob")
+        assert same_account is account
 
     def test_infer_without_start_raises(self, pipeline):
         request = InferenceRequest(
@@ -108,7 +108,7 @@ class TestInferencePipeline:
         )
         response = asyncio.run(pipeline.infer(request))
 
-        # Should succeed with auto-created balance
+        # Should succeed with auto-created account
         assert response.status in ("completed", "partial")
         assert response.tokens_remaining >= 0
 
@@ -229,3 +229,110 @@ class TestInferencePipeline:
         for node_id, info in plan.items():
             assert "experts" in info
             assert "gpu" in info
+
+    def test_accountant_recording(self, pipeline, alice_balance):
+        """TokenAccountant records every inference with host credits."""
+        from sawyer.token.accounting import InsufficientTokens
+        pipeline.set_token_balance("alice", alice_balance)
+
+        import asyncio
+        asyncio.run(pipeline.start())
+
+        request = InferenceRequest(
+            model_name="mixtral-8x7b",
+            prompt="Record this",
+            user_id="alice",
+        )
+        response = asyncio.run(pipeline.infer(request))
+        assert response.status in ("completed", "partial")
+
+        # Verify accounting recorded the inference
+        account = pipeline.accountant.get_account("alice")
+        assert account is not None
+        assert account.total_inferences == 1
+        assert account.total_tokens_used > 0
+        assert len(account.records) == 1
+
+        record = account.records[0]
+        assert record.model_name == "mixtral-8x7b"
+        assert record.user_id == "alice"
+        assert len(record.expert_ids) > 0
+        assert record.total_tokens > 0
+
+        # Verify host earned credits
+        host_earnings = pipeline.accountant.get_all_host_earnings()
+        assert len(host_earnings) > 0
+        assert any(e.tokens_served > 0 for e in host_earnings)
+
+        asyncio.run(pipeline.stop())
+
+    def test_accountant_usage_summary(self, pipeline, alice_balance):
+        """Usage summary includes token counts, tier info, and activity."""
+        pipeline.set_token_balance("alice", alice_balance)
+
+        import asyncio
+        asyncio.run(pipeline.start())
+
+        request = InferenceRequest(
+            model_name="mixtral-8x7b",
+            prompt="Summary test",
+            user_id="alice",
+        )
+        asyncio.run(pipeline.infer(request))
+
+        summary = pipeline.accountant.get_usage_summary("alice")
+        assert summary["user_id"] == "alice"
+        assert summary["tier"] == "builder"
+        assert summary["tokens_used"] > 0
+        assert summary["total_inferences"] == 1
+        assert summary["is_active"] is True
+
+        asyncio.run(pipeline.stop())
+
+    def test_accountant_billing_cycle(self, pipeline, alice_balance):
+        """Billing cycle rolls over unused tokens."""
+        pipeline.set_token_balance("alice", alice_balance)
+
+        import asyncio
+        asyncio.run(pipeline.start())
+
+        # Use some tokens
+        request = InferenceRequest(
+            model_name="mixtral-8x7b",
+            prompt="Before cycle",
+            user_id="alice",
+            max_tokens=50,
+        )
+        asyncio.run(pipeline.infer(request))
+
+        # Process billing cycle
+        new_balance = pipeline.accountant.process_billing_cycle("alice")
+        assert new_balance.rollover > 0  # Unused tokens rolled over
+
+        asyncio.run(pipeline.stop())
+
+    def test_accountant_insufficient_tokens(self, pipeline):
+        """InsufficientTokens raised when balance is exhausted."""
+        from sawyer.token.accounting import InsufficientTokens
+
+        # Create an account with minimal tokens
+        balance = TokenBalance(
+            tier=SubscriptionTier.EXPLORER,
+            monthly_budget=500_000,
+            current_balance=5,  # Almost nothing
+        )
+        pipeline.set_token_balance("broke", balance)
+
+        # Manual test of accountant recording
+        account = pipeline.accountant.get_account("broke")
+        assert account is not None
+
+        with pytest.raises(InsufficientTokens):
+            pipeline.accountant.record_inference(
+                user_id="broke",
+                model_name="mixtral-8x7b",
+                expert_ids=[0, 1, 2],
+                input_tokens=100,
+                output_tokens=100,
+                latency_ms=50.0,
+            )

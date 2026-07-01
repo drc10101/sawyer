@@ -26,7 +26,14 @@ from sawyer.node.inference import InferenceResult
 from sawyer.router.gating import GatingNetwork
 from sawyer.router.local_router import LocalRouter
 from sawyer.router.scheduler import ExpertScheduler, NodeInfo, RoutingStrategy
-from sawyer.token.budget import TokenBalance
+from sawyer.token.accounting import (
+    AccountingError,
+    InsufficientTokens,
+    InferenceRecord,
+    TokenAccountant,
+    UserAccount,
+)
+from sawyer.token.budget import SubscriptionTier, TokenBalance
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +111,7 @@ class InferencePipeline:
             strategy=strategy,
             gating=gating,
         )
-        self._token_balances: dict[str, TokenBalance] = {}
+        self._accountant = TokenAccountant()
         self._running = False
         self._total_requests = 0
         self._total_tokens_used = 0
@@ -148,38 +155,45 @@ class InferencePipeline:
         self._local_router.remove_local_node(node_id)
 
     def set_token_balance(self, user_id: str, balance: TokenBalance) -> None:
-        """Set a user's token balance.
+        """Set a user's token balance by creating an account.
+
+        If an account already exists, its balance is updated.
 
         Args:
             user_id: User identifier.
-            balance: TokenBalance for the user.
+            balance: TokenBalance to set.
         """
-        self._token_balances[user_id] = balance
+        account = self._accountant.get_account(user_id)
+        if account:
+            account.balance = balance
+        else:
+            # Create account with the given tier and override the balance
+            account = self._accountant.create_account(
+                user_id=user_id,
+                tier=balance.tier,
+                rollover=balance.rollover,
+            )
+            account.balance = balance
 
-    def get_or_create_balance(
+    def get_or_create_account(
         self,
         user_id: str,
         tier: str = "explorer",
-    ) -> TokenBalance:
-        """Get or create a token balance for a user.
+    ) -> UserAccount:
+        """Get or create a user account for inference.
 
-        If the user doesn't have a balance yet, creates one with the
+        If the user doesn't have an account, creates one with the
         specified tier's default budget.
-        """
-        from sawyer.token.budget import SubscriptionTier, TIER_TOKENS
 
-        if user_id in self._token_balances:
-            return self._token_balances[user_id]
+        Returns:
+            The user's UserAccount.
+        """
+        account = self._accountant.get_account(user_id)
+        if account:
+            return account
 
         tier_enum = SubscriptionTier(tier)
-        monthly_budget = TIER_TOKENS[tier_enum]
-        balance = TokenBalance(
-            tier=tier_enum,
-            monthly_budget=monthly_budget,
-            current_balance=monthly_budget,
-        )
-        self._token_balances[user_id] = balance
-        return balance
+        return self._accountant.create_account(user_id=user_id, tier=tier_enum)
 
     async def start(self) -> None:
         """Start the inference pipeline."""
@@ -227,9 +241,9 @@ class InferencePipeline:
         if not request.request_id:
             request.request_id = f"inf-{self._total_requests + 1}"
 
-        # Step 1: Check token balance
-        balance = self.get_or_create_balance(request.user_id)
-        if balance.total_available <= 0:
+        # Step 1: Check/create user account and quota
+        account = self.get_or_create_account(request.user_id)
+        if account.balance.total_available <= 0:
             return InferenceResponse(
                 model_name=request.model_name,
                 prompt=request.prompt,
@@ -261,7 +275,7 @@ class InferencePipeline:
                 output_tokens=0,
                 total_tokens=0,
                 latency_ms=(time.time() - start_time) * 1000,
-                tokens_remaining=balance.total_available,
+                tokens_remaining=account.balance.total_available,
                 request_id=request.request_id,
                 status="failed",
             )
@@ -275,7 +289,7 @@ class InferencePipeline:
                 output_tokens=0,
                 total_tokens=0,
                 latency_ms=(time.time() - start_time) * 1000,
-                tokens_remaining=balance.total_available,
+                tokens_remaining=account.balance.total_available,
                 request_id=request.request_id,
                 status="no_nodes",
             )
@@ -318,11 +332,25 @@ class InferencePipeline:
         latency_ms = (time.time() - start_time) * 1000
         total_tokens = input_token_estimate + output_tokens
 
-        # Step 6: Debit token balance
+        # Step 6: Record inference and debit tokens via accountant
         try:
-            remaining = balance.debit(total_tokens)
-        except ValueError:
+            # Pick a primary node for the accounting record
+            primary_node = next(iter(nodes_used.values()), "")
+            record = self._accountant.record_inference(
+                user_id=request.user_id,
+                model_name=request.model_name,
+                expert_ids=experts_routed,
+                input_tokens=input_token_estimate,
+                output_tokens=output_tokens,
+                latency_ms=latency_ms,
+                node_id=primary_node,
+                routing_strategy=routing.get("strategy", ""),
+            )
+            remaining = account.balance.total_available
+        except InsufficientTokens:
             remaining = 0
+        except AccountingError:
+            remaining = account.balance.total_available
 
         self._total_requests += 1
         self._total_tokens_used += total_tokens
@@ -378,7 +406,7 @@ class InferencePipeline:
             "total_requests": self._total_requests,
             "total_tokens_used": self._total_tokens_used,
             "uptime_seconds": time.time() - self._start_time if self._running else 0,
-            "registered_users": len(self._token_balances),
+            "registered_users": len(self._accountant._accounts),
             "router": {
                 "active_nodes": router_status.active_nodes,
                 "strategy": router_status.strategy,
@@ -388,4 +416,10 @@ class InferencePipeline:
 
     def get_user_balance(self, user_id: str) -> TokenBalance | None:
         """Get a user's token balance, or None if not found."""
-        return self._token_balances.get(user_id)
+        account = self._accountant.get_account(user_id)
+        return account.balance if account else None
+
+    @property
+    def accountant(self) -> TokenAccountant:
+        """Access the token accountant for usage reports and billing."""
+        return self._accountant
