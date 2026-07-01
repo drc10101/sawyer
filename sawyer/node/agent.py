@@ -167,11 +167,19 @@ class SawyerNode:
 
         self._router_client.heartbeat(status=status)
 
-    async def start(self) -> None:
-        """Start the node agent — register and begin serving."""
+    async def start(self, offline: bool = False) -> None:
+        """Start the node agent — register and begin serving.
+
+        Args:
+            offline: If True, skip router registration and run standalone.
+        """
         logger.info("Starting Sawyer Node Agent")
         self._running = True
-        await self.register()
+        if offline:
+            logger.info("Running in offline mode — no router connection")
+            self.node_id = "offline"
+        else:
+            await self.register()
 
     async def stop(self) -> None:
         """Stop the node agent — deregister and clean up."""

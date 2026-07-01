@@ -15,6 +15,8 @@ import argparse
 import asyncio
 import sys
 
+import grpc
+
 from sawyer.config import SawyerConfig
 from sawyer.model.registry import get_model, list_models
 from sawyer.node.agent import SawyerNode
@@ -58,6 +60,8 @@ def cmd_serve(args) -> int:
     print(f"  Router: {args.router}")
     print(f"  Backend: {args.backend}")
     print(f"  Max experts: {config.max_experts}")
+    if args.offline:
+        print("  Mode: offline (no router connection)")
 
     # If a model is specified, set up the inference backend
     if args.model:
@@ -82,9 +86,16 @@ def cmd_serve(args) -> int:
 
     # Start the node
     try:
-        asyncio.run(node.start())
+        asyncio.run(node.start(offline=args.offline))
     except KeyboardInterrupt:
         print("\nShutting down...")
+    except grpc.RpcError as e:
+        print(f"\n  ERROR: Could not connect to router at {args.router}")
+        print(f"  {e.details()}")
+        print(f"\n  The Sawyer router is not yet available.")
+        print(f"  Start in offline mode: sawyer serve --offline")
+        print(f"  Or check your connection and try again.")
+        return 1
     return 0
 
 
@@ -447,6 +458,11 @@ def main() -> int:
         choices=["subprocess", "http"],
         default="subprocess",
         help="Inference backend mode",
+    )
+    serve_parser.add_argument(
+        "--offline",
+        action="store_true",
+        help="Start in offline mode (no router connection)",
     )
 
     # status
