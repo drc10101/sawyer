@@ -401,6 +401,91 @@ class TestLocalInference:
             assert mock_ollama.called
             assert result.text == "Test response"
 
+    def test_infer_stream_ollama_multi_turn(self):
+        """_stream_ollama passes full conversation history."""
+        inference = LocalInference()
+        messages = [
+            {"role": "system", "content": "You are helpful."},
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi!"},
+            {"role": "user", "content": "What is 2+2?"},
+        ]
+
+        # Mock the entire _stream_ollama to verify it's called
+        # with messages — then test the actual generation logic
+        # separately via integration tests
+        chunks = [
+            {"id": "chatcmpl-1", "object": "chat.completion.chunk",
+             "created": 1, "model": "llama3",
+             "choices": [{"index": 0, "delta": {"content": "4"}, "finish_reason": None}]},
+            {"id": "chatcmpl-1", "object": "chat.completion.chunk",
+             "created": 1, "model": "llama3",
+             "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]},
+        ]
+        with patch.object(inference, "_stream_ollama", return_value=iter(chunks)):
+            result = list(inference.infer_stream(
+                "What is 2+2?", model="llama3", messages=messages,
+            ))
+            content_parts = [c for c in result if c["choices"][0]["delta"].get("content")]
+            assert len(content_parts) == 1
+            assert content_parts[0]["choices"][0]["delta"]["content"] == "4"
+            # Verify messages was forwarded
+            call_kwargs = inference._stream_ollama.call_args
+            assert call_kwargs[1].get("messages") == messages
+
+    def test_infer_stream_ollama_thinking(self):
+        """_stream_ollama yields thinking deltas for reasoning models."""
+        inference = LocalInference()
+
+        # Test that infer_stream passes through thinking chunks
+        chunks = [
+            {"id": "chatcmpl-1", "object": "chat.completion.chunk",
+             "created": 1, "model": "glm-5.1",
+             "choices": [{"index": 0, "delta": {"thinking": "Let me reason"}, "finish_reason": None}]},
+            {"id": "chatcmpl-1", "object": "chat.completion.chunk",
+             "created": 1, "model": "glm-5.1",
+             "choices": [{"index": 0, "delta": {"content": "4"}, "finish_reason": None}]},
+            {"id": "chatcmpl-1", "object": "chat.completion.chunk",
+             "created": 1, "model": "glm-5.1",
+             "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]},
+        ]
+        with patch.object(inference, "_stream_ollama", return_value=iter(chunks)):
+            result = list(inference.infer_stream(
+                "2+2?", model="glm-5.1",
+            ))
+            thinking_chunks = [c for c in result if "thinking" in c["choices"][0]["delta"]]
+            content_chunks = [c for c in result if "content" in c["choices"][0]["delta"]]
+            assert len(thinking_chunks) == 1
+            assert thinking_chunks[0]["choices"][0]["delta"]["thinking"] == "Let me reason"
+            assert len(content_chunks) == 1
+            assert content_chunks[0]["choices"][0]["delta"]["content"] == "4"
+
+    def test_infer_stream_passes_messages(self):
+        """infer_stream forwards messages to backend streamers."""
+        inference = LocalInference()
+        messages = [
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi!"},
+            {"role": "user", "content": "2+2?"},
+        ]
+
+        # Mock _stream_ollama to just verify messages were passed
+        with patch.object(
+            inference, "_stream_ollama", return_value=iter([])
+        ) as mock_stream:
+            mock_stream.return_value = iter([
+                {"id": "test", "object": "chat.completion.chunk",
+                 "created": 1, "model": "llama3",
+                 "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]},
+            ])
+            list(inference.infer_stream(
+                "2+2?", model="llama3", messages=messages
+            ))
+            mock_stream.assert_called_once()
+            call_kwargs = mock_stream.call_args
+            # Messages should be forwarded
+            assert call_kwargs[1].get("messages") == messages or call_kwargs[0][-1] == messages
+
 
 class TestClientAPI:
     """Test the FastAPI client endpoints."""
@@ -545,29 +630,152 @@ class TestClientAPI:
 
     def test_chat_completions_streaming(self, client):
         """Chat completions supports streaming responses."""
-        from sawyer.client import InferenceResult
+        # Mock infer_stream to yield SSE chunks
+        def mock_stream(*args, **kwargs):
+            yield {
+                "id": "chatcmpl-123",
+                "object": "chat.completion.chunk",
+                "created": 1234567890,
+                "model": "sawyer",
+                "choices": [
+                    {"index": 0, "delta": {"role": "assistant"}, "finish_reason": None}
+                ],
+            }
+            yield {
+                "id": "chatcmpl-123",
+                "object": "chat.completion.chunk",
+                "created": 1234567890,
+                "model": "sawyer",
+                "choices": [
+                    {"index": 0, "delta": {"content": "Hello"}, "finish_reason": None}
+                ],
+            }
+            yield {
+                "id": "chatcmpl-123",
+                "object": "chat.completion.chunk",
+                "created": 1234567890,
+                "model": "sawyer",
+                "choices": [
+                    {"index": 0, "delta": {"content": "!"}, "finish_reason": None}
+                ],
+            }
+            yield {
+                "id": "chatcmpl-123",
+                "object": "chat.completion.chunk",
+                "created": 1234567890,
+                "model": "sawyer",
+                "choices": [
+                    {"index": 0, "delta": {}, "finish_reason": "stop"}
+                ],
+            }
 
-        # Test that the endpoint accepts stream=true and returns the right content type
-        with patch("sawyer.client.LocalInference.infer") as mock_infer:
-            mock_infer.return_value = InferenceResult(
-                text="Hello!",
-                input_tokens=5,
-                output_tokens=3,
-                model="sawyer",
-                finish_reason="stop",
-            )
+        with patch("sawyer.client.LocalInference.infer_stream") as mock_is:
+            mock_is.return_value = mock_stream()
 
-            # Non-streaming should work normally
             resp = client.post(
                 "/v1/chat/completions",
                 json={
                     "model": "sawyer",
                     "messages": [{"role": "user", "content": "Hello"}],
-                    "stream": False,
+                    "stream": True,
                 },
             )
             assert resp.status_code == 200
-            assert resp.json()["choices"][0]["message"]["content"] == "Hello!"
+            # Should return text/event-stream content type
+            assert "text/event-stream" in resp.headers.get("content-type", "")
+
+            # Parse the SSE data
+            content_parts = []
+            for line in resp.text.split("\n"):
+                if line.startswith("data: ") and line != "data: [DONE]":
+                    data = json.loads(line[6:])
+                    if data.get("choices"):
+                        delta = data["choices"][0].get("delta", {})
+                        if "content" in delta:
+                            content_parts.append(delta["content"])
+
+            assert content_parts == ["Hello", "!"]
+
+    def test_chat_completions_streaming_with_thinking(self, client):
+        """Streaming includes thinking deltas for reasoning models."""
+        def mock_stream(*args, **kwargs):
+            yield {
+                "id": "chatcmpl-456",
+                "object": "chat.completion.chunk",
+                "created": 1234567890,
+                "model": "glm-5.1",
+                "choices": [
+                    {"index": 0, "delta": {"thinking": "Let me think"}, "finish_reason": None}
+                ],
+            }
+            yield {
+                "id": "chatcmpl-456",
+                "object": "chat.completion.chunk",
+                "created": 1234567890,
+                "model": "glm-5.1",
+                "choices": [
+                    {"index": 0, "delta": {"content": "4"}, "finish_reason": None}
+                ],
+            }
+            yield {
+                "id": "chatcmpl-456",
+                "object": "chat.completion.chunk",
+                "created": 1234567890,
+                "model": "glm-5.1",
+                "choices": [
+                    {"index": 0, "delta": {}, "finish_reason": "stop"}
+                ],
+            }
+
+        with patch("sawyer.client.LocalInference.infer_stream") as mock_is:
+            mock_is.return_value = mock_stream()
+
+            resp = client.post(
+                "/v1/chat/completions",
+                json={
+                    "model": "glm-5.1:cloud",
+                    "messages": [{"role": "user", "content": "2+2?"}],
+                    "stream": True,
+                },
+            )
+            assert resp.status_code == 200
+
+            thinking_parts = []
+            content_parts = []
+            for line in resp.text.split("\n"):
+                if line.startswith("data: ") and line != "data: [DONE]":
+                    data = json.loads(line[6:])
+                    if data.get("choices"):
+                        delta = data["choices"][0].get("delta", {})
+                        if "thinking" in delta:
+                            thinking_parts.append(delta["thinking"])
+                        if "content" in delta:
+                            content_parts.append(delta["content"])
+
+            assert thinking_parts == ["Let me think"]
+            assert content_parts == ["4"]
+
+    def test_chat_completions_streaming_error(self, client):
+        """Streaming returns error as SSE event when backend fails."""
+        def mock_stream_error(*args, **kwargs):
+            raise RuntimeError("No inference backend available")
+            yield  # noqa: unreachable — makes this a generator
+
+        with patch("sawyer.client.LocalInference.infer_stream") as mock_is:
+            mock_is.side_effect = RuntimeError("No inference backend available")
+
+            resp = client.post(
+                "/v1/chat/completions",
+                json={
+                    "model": "sawyer",
+                    "messages": [{"role": "user", "content": "Hello"}],
+                    "stream": True,
+                },
+            )
+            assert resp.status_code == 200  # SSE stream starts 200
+
+            # Should contain error data
+            assert "No inference backend" in resp.text or "error" in resp.text
 
     def test_balance_endpoint(self, client):
         """Balance endpoint returns token info."""

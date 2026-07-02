@@ -508,23 +508,47 @@ class LocalInference:
         max_tokens: int = 512,
         temperature: float = 0.7,
         top_p: float = 0.9,
+        messages: list | None = None,
     ):
         """Stream inference results as SSE chunks.
 
         Yields dicts in OpenAI streaming format:
-        {"id": ..., "object": "chat.completion.chunk", "choices": [{"delta": {"content": "..."}}]}
+        {"id": ..., "object": "chat.completion.chunk", "choices": [{"delta": {"content": "..."}]}
+
+        The first chunk always has {"role": "assistant"} in the delta.
+        The last chunk has {"finish_reason": "stop"}.
         """
+        chat_id = f"chatcmpl-{int(time.time())}"
 
         if not self._discovered_models:
             self.discover_models()
 
         resolved_model, backend_hint = self._resolve_model(model)
 
+        # Yield role chunk first (OpenAI streaming format requires this)
+        yield {
+            "id": chat_id,
+            "object": "chat.completion.chunk",
+            "created": int(time.time()),
+            "model": resolved_model,
+            "choices": [{"index": 0, "delta": {"role": "assistant"}, "finish_reason": None}],
+        }
+
         # Try streaming from Ollama first (native streaming support)
         if backend_hint in (None, "ollama"):
-            for chunk in self._stream_ollama(prompt, resolved_model, max_tokens, temperature):
+            streamed = False
+            for chunk in self._stream_ollama(
+                prompt,
+                resolved_model,
+                max_tokens,
+                temperature,
+                chat_id=chat_id,
+                messages=messages,
+            ):
                 yield chunk
-            return
+                streamed = True
+            if streamed:
+                return
 
         # Try streaming from OpenAI-compatible backends
         if backend_hint in ("llama_cpp", "vllm", "lm_studio", None):
@@ -535,7 +559,15 @@ class LocalInference:
             ]:
                 chunks = list(
                     self._stream_openai_compatible(
-                        url, name, prompt, resolved_model, max_tokens, temperature, top_p
+                        url,
+                        name,
+                        prompt,
+                        resolved_model,
+                        max_tokens,
+                        temperature,
+                        top_p,
+                        chat_id=chat_id,
+                        messages=messages,
                     )
                 )
                 if chunks:
@@ -543,10 +575,9 @@ class LocalInference:
                         yield chunk
                     return
 
-        # No streaming backend available — fall back to non-streaming
+        # No streaming backend available -- fall back to non-streaming
         try:
             result = self.infer(prompt, model, max_tokens, temperature, top_p)
-            chat_id = f"chatcmpl-{int(time.time())}"
             # Yield the full content as one chunk then the stop
             yield {
                 "id": chat_id,
@@ -556,7 +587,7 @@ class LocalInference:
                 "choices": [
                     {
                         "index": 0,
-                        "delta": {"role": "assistant", "content": result.text},
+                        "delta": {"content": result.text},
                         "finish_reason": None,
                     }
                 ],
@@ -572,10 +603,29 @@ class LocalInference:
             # Re-raise with proper SSE error format
             raise
 
-    def _stream_ollama(self, prompt: str, model: str, max_tokens: int, temperature: float):
+    def _stream_ollama(
+        self,
+        prompt: str,
+        model: str,
+        max_tokens: int,
+        temperature: float,
+        chat_id: str = "",
+        messages: list | None = None,
+    ):
         """Stream from Ollama using its native /api/chat streaming."""
         try:
             import httpx
+
+            # Build Ollama messages from conversation history
+            ollama_messages = []
+            if messages:
+                for msg in messages:
+                    role = msg.get("role", "user")
+                    content = msg.get("content", "")
+                    if role in ("user", "assistant", "system"):
+                        ollama_messages.append({"role": role, "content": content})
+            if not ollama_messages:
+                ollama_messages = [{"role": "user", "content": prompt}]
 
             with (
                 httpx.Client(timeout=120) as hclient,
@@ -584,7 +634,7 @@ class LocalInference:
                     f"{self._ollama_url}/api/chat",
                     json={
                         "model": model,
-                        "messages": [{"role": "user", "content": prompt}],
+                        "messages": ollama_messages,
                         "stream": True,
                         "options": {
                             "num_predict": max_tokens,
@@ -597,7 +647,8 @@ class LocalInference:
                     logger.debug(f"Ollama stream returned {resp.status_code}")
                     return
 
-                chat_id = f"chatcmpl-{int(time.time())}"
+                if not chat_id:
+                    chat_id = f"chatcmpl-{int(time.time())}"
                 for line in resp.iter_lines():
                     if not line.strip():
                         continue
@@ -608,9 +659,25 @@ class LocalInference:
 
                     message = data.get("message", {})
                     content = message.get("content", "") if isinstance(message, dict) else ""
+                    thinking = message.get("thinking", "") if isinstance(message, dict) else ""
 
-                    # Handle thinking models in streaming
-                    # Content comes in deltas, thinking comes in thinking field
+                    # Yield thinking as a separate delta (reasoning models)
+                    if thinking and isinstance(message, dict):
+                        yield {
+                            "id": chat_id,
+                            "object": "chat.completion.chunk",
+                            "created": int(time.time()),
+                            "model": data.get("model", model),
+                            "choices": [
+                                {
+                                    "index": 0,
+                                    "delta": {"thinking": thinking},
+                                    "finish_reason": None,
+                                }
+                            ],
+                        }
+
+                    # Yield content delta
                     if content:
                         yield {
                             "id": chat_id,
@@ -632,7 +699,13 @@ class LocalInference:
                             "object": "chat.completion.chunk",
                             "created": int(time.time()),
                             "model": data.get("model", model),
-                            "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
+                            "choices": [
+                                {
+                                    "index": 0,
+                                    "delta": {},
+                                    "finish_reason": "stop",
+                                }
+                            ],
                         }
                         return
 
@@ -652,10 +725,23 @@ class LocalInference:
         max_tokens: int,
         temperature: float,
         top_p: float,
+        chat_id: str = "",
+        messages: list | None = None,
     ):
         """Stream from an OpenAI-compatible backend using SSE."""
         try:
             import httpx
+
+            # Build messages from conversation history
+            api_messages = []
+            if messages:
+                for msg in messages:
+                    role = msg.get("role", "user")
+                    content = msg.get("content", "")
+                    if role in ("user", "assistant", "system"):
+                        api_messages.append({"role": role, "content": content})
+            if not api_messages:
+                api_messages = [{"role": "user", "content": prompt}]
 
             with (
                 httpx.Client(timeout=120) as client,
@@ -664,7 +750,7 @@ class LocalInference:
                     f"{url}/v1/chat/completions",
                     json={
                         "model": model,
-                        "messages": [{"role": "user", "content": prompt}],
+                        "messages": api_messages,
                         "max_tokens": max_tokens,
                         "temperature": temperature,
                         "top_p": top_p,
@@ -1340,33 +1426,88 @@ def create_client_app(config: SawyerConfig | None = None) -> FastAPI:
             raise HTTPException(status_code=400, detail="No user message found")
 
         if stream:
-            # Return SSE stream
-            async def generate():
+            # Return SSE stream — run sync generator in a thread
+            # to avoid blocking the event loop
+            import queue
+            import threading
+
+            def _producer(
+                q: queue.Queue,
+                prompt: str,
+                model: str,
+                max_tokens: int,
+                temperature: float,
+                top_p: float,
+                messages: list,
+            ):
+                """Run infer_stream in a background thread, push chunks to queue."""
                 try:
                     for chunk in local_inference.infer_stream(
-                        prompt=last_user_msg,
+                        prompt=prompt,
                         model=model,
                         max_tokens=max_tokens,
                         temperature=temperature,
                         top_p=top_p,
+                        messages=messages,
                     ):
-                        yield f"data: {json.dumps(chunk)}\n\n"
-                    yield "data: [DONE]\n\n"
+                        q.put(("chunk", chunk))
                 except RuntimeError as e:
-                    error_data = {
-                        "error": {
-                            "message": str(e),
-                            "type": "server_error",
-                            "code": 503,
+                    q.put(("error", str(e)))
+                except Exception as e:
+                    q.put(("error", f"Inference error: {e}"))
+                finally:
+                    q.put(None)  # sentinel: done
+
+            q: queue.Queue = queue.Queue()
+            thread = threading.Thread(
+                target=_producer,
+                args=(
+                    q,
+                    last_user_msg,
+                    model,
+                    max_tokens,
+                    temperature,
+                    top_p,
+                    messages,
+                ),
+                daemon=True,
+            )
+            thread.start()
+
+            async def generate():
+                """Pull chunks from queue and yield SSE events."""
+                while True:
+                    # Use asyncio.to_thread to avoid blocking while
+                    # waiting for the queue, with a timeout so we can
+                    # check if the thread is still alive
+                    item = await asyncio.to_thread(q.get, timeout=30)
+                    if item is None:
+                        # Producer finished
+                        yield "data: [DONE]\n\n"
+                        return
+                    tag, data = item
+                    if tag == "error":
+                        error_data = {
+                            "error": {
+                                "message": data,
+                                "type": "server_error",
+                                "code": 503,
+                            }
                         }
-                    }
-                    yield f"data: {json.dumps(error_data)}\n\n"
-                    yield "data: [DONE]\n\n"
+                        yield f"data: {json.dumps(error_data)}\n\n"
+                        yield "data: [DONE]\n\n"
+                        return
+                    # tag == "chunk"
+                    yield f"data: {json.dumps(data)}\n\n"
 
             return StreamingResponse(
                 generate(),
                 media_type="text/event-stream",
-                headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no",
+                },
             )
 
         # Non-streaming response
@@ -1473,7 +1614,7 @@ def serve_client(
     # Discover models at startup so we know what's available
     local_inference = LocalInference(config)
     models = local_inference.discover_models(force=True)
-    print("\n  Sawyer Client v0.4.0")
+    print("\n  Sawyer Client v0.5.0")
     print(f"  Chat UI:     http://{host}:{port}")
     print(f"  API:         http://{host}:{port}/v1/chat/completions")
     print(f"  Models:      http://{host}:{port}/v1/models")
