@@ -20,7 +20,7 @@ Built on [Bedrock](https://github.com/drc10101/bedrock) for node identity, conse
 
 ### For the Developer with a Laptop
 
-You're building an app that calls LLM APIs. GPT-4 costs $0.03/1K tokens. Claude Haiku is cheaper but still adds up. Sawyer gives you 50K tokens free to start — roughly $0.01/1K tokens at Pro — with chat and code models available from day one.
+You're building an app that calls LLM APIs. GPT-4 costs $0.03/1K tokens. Claude Haiku is cheaper but still adds up. Sawyer gives you a 14-day free trial with unlimited tokens — roughly $0.01/1K tokens at Pro — with chat and code models available from day one.
 
 **bash / Git Bash:**
 ```bash
@@ -66,7 +66,7 @@ Your startup needs inference but can't justify GPU costs. Subscribe at the Busin
 
 ### For the Hobbyist
 
-You want to experiment with local models but only have one GPU. Sawyer lets you download experts, serve them locally or to the network, and use the chat client to interact. Free tier with 50K tokens to start, or upgrade to Pro for 1M tokens.
+You want to experiment with local models but only have one GPU. Sawyer lets you download experts, serve them locally or to the network, and use the chat client to interact. 14-day free trial, then Pro for $15/mo.
 
 ---
 
@@ -148,11 +148,11 @@ The kid with the 4090 doing most of the work gets the biggest slice. That's the 
 
 | Tier | Price | Tokens | Per 1K Tokens | Best For |
 |------|-------|--------|---------------|----------|
-| Explorer | Free | 50K | $0.00 | Prototyping, experimentation |
+| Explorer | 14-day free trial | Unlimited | $0.00 | Try it out |
 | Pro | $15/mo | 1M | $0.015 | Development, production workloads |
 | Business | $99/mo | 10M | $0.01 | Teams, custom deployment |
 
-Free to start. Paid when you ship. 70% of subscription revenue goes to the hosts who serve inference — real money attracts real hardware.
+14-day free trial with unlimited tokens. Then pick your plan. 70% of subscription revenue goes to the hosts who serve inference — real money attracts real hardware.
 
 ~3-6x cheaper than GPT-4. No rate limits. No surprise bills. Token budget resets monthly, unused tokens roll over (max 1 month).
 
@@ -222,8 +222,8 @@ Every node earns proportional to its hardware contribution. The 4090 in Dallas e
 - Reports health and throughput to the router
 
 ### 3. `sawyer/token/` — Token Economics
-- Free tier with 50K tokens to start, no credit card
-- Pro tier at $15/mo gives 1M tokens
+- 14-day free trial with unlimited tokens, no credit card
+- Pro tier at $15/mo gives 1M tokens, Business at $99/mo gives 10M
 - Tokens debit per inference request (input + output tokens)
 - Token budget resets monthly, rolls over unused tokens (max 1 month)
 - Provider pool = 70% of all subscription revenue distributed quarterly
@@ -418,7 +418,7 @@ To uninstall: `.\install_sawyer.ps1 -Uninstall`
 - **MoE is more distributable than dense inference.** Experts are independent sub-networks. Unlike tensor parallelism (which splits a single matrix across GPUs), each expert runs its own forward pass. MoE is more distributable than dense tensor-parallel inference because experts are independently activated, but Sawyer's core engineering challenge is keeping routing, expert execution, and aggregation fast enough to feel local.
 - **Sparsity means efficiency.** Only ~25% of parameters activate per token on Mixtral. The network doesn't pay for dormant compute.
 - **Quantized models fit on consumer hardware.** Q4_K_M Mixtral expert ~1.5GB. A 3090 can host 2-3 experts comfortably alongside other workloads.
-- **Free tier removes the barrier.** Developers try without commitment. $15/mo Pro is the real entry point — high enough to fund real host payouts, low enough to beat every major API.
+- **14-day free trial removes the barrier.** Developers try without commitment. $15/mo Pro is the real entry point — high enough to fund real host payouts, low enough to beat every major API.
 - **Hardware investment is rewarded.** Tier 4 (24GB+) earns 4x per token compared to Tier 1 (4GB). Your 4090 pays for itself.
 
 ---
