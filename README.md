@@ -20,7 +20,7 @@ Built on [Bedrock](https://github.com/drc10101/bedrock) for node identity, conse
 
 ### For the Developer with a Laptop
 
-You're building an app that calls LLM APIs. GPT-4 costs $0.03/1K tokens. Claude Haiku is cheaper but still adds up. Sawyer gives you 500K tokens for $5/mo -- roughly $0.01/1K tokens -- with chat and code models available from day one.
+You're building an app that calls LLM APIs. GPT-4 costs $0.03/1K tokens. Claude Haiku is cheaper but still adds up. Sawyer gives you 50K tokens free to start — roughly $0.01/1K tokens at Pro — with chat and code models available from day one.
 
 **bash / Git Bash:**
 ```bash
@@ -62,11 +62,11 @@ Tier 4 (24GB+ VRAM) can host any model's experts. Tier 1 (4GB) can still partici
 
 ### For the Small Team
 
-Your startup needs inference but can't justify GPU costs. Subscribe at the Builder tier ($20/mo, 2M tokens) and route all your calls through Sawyer. Your inference cost drops by 3-6x compared to major API providers. No rate limits, no surprise bills.
+Your startup needs inference but can't justify GPU costs. Subscribe at the Business tier ($99/mo, 10M tokens) and route all your calls through Sawyer. Your inference cost drops by 3-6x compared to major API providers. No rate limits, no surprise bills.
 
 ### For the Hobbyist
 
-You want to experiment with local models but only have one GPU. Sawyer lets you download experts, serve them locally or to the network, and use the chat client to interact. Free tier with 50K tokens to start, or subscribe for more.
+You want to experiment with local models but only have one GPU. Sawyer lets you download experts, serve them locally or to the network, and use the chat client to interact. Free tier with 50K tokens to start, or upgrade to Pro for 1M tokens.
 
 ---
 
@@ -79,18 +79,18 @@ Sawyer is not volunteer computing. You get paid for the compute you contribute.
 Every quarter, 70% of all subscription revenue goes into the provider pool:
 
 ```
-Provider Pool = Total Subscribers x $5/month x 3 months x 70%
+Provider Pool = Total Subscribers x Avg Subscription x 70%
 ```
 
-With 100 subscribers:
-- Revenue: $1,500/quarter
-- Provider pool: $1,050
-- Platform: $450
+With 100 Pro subscribers ($15/mo):
+- Revenue: $1,500/month ($4,500/quarter)
+- Provider pool: $3,150/quarter
+- Platform: $1,350/quarter
 
 With 1,000 subscribers:
-- Revenue: $15,000/quarter
-- Provider pool: $10,500
-- Platform: $4,500
+- Revenue: $15,000/month ($45,000/quarter)
+- Provider pool: $31,500/quarter
+- Platform: $13,500/quarter
 
 The pool grows as the network grows. More subscribers means more money for everyone.
 
@@ -109,12 +109,12 @@ Your earnings depend on what you bring to the network. A 4090 earns more per tok
 
 | Tier | VRAM | Multiplier | Can Host | Monthly Estimate* |
 |------|------|-----------|----------|-------------------|
-| Tier 1 | 4 GB | 1x | Qwen1.5-MoE experts (0.5 GB) | $5-15 |
-| Tier 2 | 8 GB | 2x | + DeepSeek-V2 experts (0.8 GB) | $15-40 |
-| Tier 3 | 12 GB | 3x | + Mixtral experts (1.5 GB) | $30-80 |
-| Tier 4 | 24 GB+ | 4x | All experts, local models | $60-200+ |
+| Tier 1 | 4 GB | 1x | Qwen1.5-MoE experts (0.5 GB) | $15-50 |
+| Tier 2 | 8 GB | 2x | + DeepSeek-V2 experts (0.8 GB) | $40-120 |
+| Tier 3 | 12 GB | 3x | + Mixtral experts (1.5 GB) | $80-250 |
+| Tier 4 | 24 GB+ | 4x | All experts, local models | $200-800+ |
 
-*Estimates based on 100 subscribers, varies with network size and utilization.
+*Estimates based on 100 Pro subscribers at $15/mo, varies with network size and utilization.
 
 **Same 100K tokens served:**
 - Tier 1 laptop: 100K x 1x = 100K weighted
@@ -128,16 +128,16 @@ The monster PC earns 4x for the same token count because it invested in hardware
 
 | Provider | Tokens | Uptime | Tier | Weighted | Token Earnings | Uptime Earnings | Total |
 |----------|--------|--------|------|----------|---------------|----------------|-------|
-| Monster PC (4090) | 500K | 720h | Tier 4 (4x) | 2,000,000 | $893 | $35 | **$928** |
-| Gaming rig (3060) | 200K | 500h | Tier 3 (3x) | 600,000 | $268 | $24 | **$292** |
-| Midrange (1060) | 50K | 300h | Tier 1 (1x) | 50,000 | $22 | $15 | **$37** |
+| Monster PC (4090) | 500K | 720h | Tier 4 (4x) | 2,000,000 | $2,678 | $105 | **$2,783** |
+| Gaming rig (3060) | 200K | 500h | Tier 3 (3x) | 600,000 | $803 | $72 | **$875** |
+| Midrange (1060) | 50K | 300h | Tier 1 (1x) | 50,000 | $67 | $44 | **$111** |
 
 The kid with the 4090 doing most of the work gets the biggest slice. That's the point.
 
 ### Payouts
 
 - Quarterly: January-March, April-June, July-September, October-December
-- Minimum payout: $25. Below that, your earnings roll over to next quarter
+- Minimum payout: $10. Below that, your earnings roll over to next quarter
 - Methods: Stripe Connect (primary), PayPal
 - Failed payouts roll over — nobody loses money
 - **Providers must complete Stripe Connect onboarding to receive payouts.** Earnings accumulate but cannot be disbursed until Stripe onboarding is complete. Run `sawyer provider onboarding <id>` to get started.
@@ -148,11 +148,13 @@ The kid with the 4090 doing most of the work gets the biggest slice. That's the 
 
 | Tier | Price | Tokens | Per 1K Tokens | Best For |
 |------|-------|--------|---------------|----------|
-| Explorer | $5/mo | 500K | $0.01 | Prototyping, experimentation |
-| Builder | $20/mo | 2M | $0.01 | Development, testing |
-| Operator | $50/mo | 5M | $0.01 | Production workloads |
+| Explorer | Free | 50K | $0.00 | Prototyping, experimentation |
+| Pro | $15/mo | 1M | $0.015 | Development, production workloads |
+| Business | $99/mo | 10M | $0.01 | Teams, custom deployment |
 
-~3-6x cheaper than GPT-4, roughly in line with Claude Haiku pricing. No rate limits. No surprise bills. Token budget resets monthly, unused tokens roll over (max 1 month).
+Free to start. Paid when you ship. 70% of subscription revenue goes to the hosts who serve inference — real money attracts real hardware.
+
+~3-6x cheaper than GPT-4. No rate limits. No surprise bills. Token budget resets monthly, unused tokens roll over (max 1 month).
 
 ---
 
@@ -220,12 +222,11 @@ Every node earns proportional to its hardware contribution. The 4090 in Dallas e
 - Reports health and throughput to the router
 
 ### 3. `sawyer/token/` — Token Economics
-- $5/mo subscription grants 500K tokens
+- Free tier with 50K tokens to start, no credit card
+- Pro tier at $15/mo gives 1M tokens
 - Tokens debit per inference request (input + output tokens)
 - Token budget resets monthly, rolls over unused tokens (max 1 month)
-- Provider pool = subscribers x $5 x months x 70%
-- 90% distributed by weighted throughput, 10% by uptime
-- Quarterly payouts, $25 minimum, rollover below threshold
+- Provider pool = 70% of all subscription revenue distributed quarterly
 
 ### 4. `sawyer/provider/` — Provider Economics & Dashboard
 - **Node Tiers**: 4 hardware tiers (4GB/8GB/12GB/24GB+) with 1x-4x earnings multipliers
@@ -266,7 +267,7 @@ Every node earns proportional to its hardware contribution. The 4090 in Dallas e
    --> Token balance debited
 
 3. Quarterly settlement
-   --> Provider pool = subscribers x $5 x 3 months x 70%
+   --> Provider pool = 70% of all subscription revenue
    --> 90% distributed by weighted throughput (tokens x tier multiplier)
    --> 10% distributed by uptime
    --> Payouts >= $25 via Stripe Connect
@@ -417,7 +418,7 @@ To uninstall: `.\install_sawyer.ps1 -Uninstall`
 - **MoE is more distributable than dense inference.** Experts are independent sub-networks. Unlike tensor parallelism (which splits a single matrix across GPUs), each expert runs its own forward pass. MoE is more distributable than dense tensor-parallel inference because experts are independently activated, but Sawyer's core engineering challenge is keeping routing, expert execution, and aggregation fast enough to feel local.
 - **Sparsity means efficiency.** Only ~25% of parameters activate per token on Mixtral. The network doesn't pay for dormant compute.
 - **Quantized models fit on consumer hardware.** Q4_K_M Mixtral expert ~1.5GB. A 3090 can host 2-3 experts comfortably alongside other workloads.
-- **$5/mo is the sweet spot.** Below the psychological barrier of "another subscription." Enough tokens to prototype, test, and run real workloads. Revenue sustains the network without extracting from users.
+- **Free tier removes the barrier.** Developers try without commitment. $15/mo Pro is the real entry point — high enough to fund real host payouts, low enough to beat every major API.
 - **Hardware investment is rewarded.** Tier 4 (24GB+) earns 4x per token compared to Tier 1 (4GB). Your 4090 pays for itself.
 
 ---

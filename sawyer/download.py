@@ -186,27 +186,33 @@ def ensure_llama_bench(force: bool = False) -> Path:
 def get_binary_info(binary: Path) -> dict:
     """Get version info from a Sawyer Fast Llama binary.
 
+    Tries --version first (llama-cli), falls back to running the binary
+    with no args and parsing stderr for version info (llama-bench).
+
     Returns dict with 'version' and 'commit' keys, or empty dict on failure.
     """
     import subprocess
+    import re
 
-    try:
-        result = subprocess.run(
-            [str(binary), "--version"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        output = result.stdout.strip() or result.stderr.strip()
-        # Parse "version: 50 (ba09fc5)" format
-        import re
+    # Try --version first (works for llama-cli)
+    for args in [["--version"], ["-v"]]:
+        try:
+            result = subprocess.run(
+                [str(binary)] + args,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            output = result.stdout.strip() or result.stderr.strip()
+            if output and "version" in output.lower():
+                version_match = re.search(r"version:\s*(\d+)", output)
+                commit_match = re.search(r"\(([a-f0-9]{7,})\)", output)
+                return {
+                    "version": version_match.group(1) if version_match else "unknown",
+                    "commit": commit_match.group(1) if commit_match else "unknown",
+                    "raw": output,
+                }
+        except Exception:
+            pass
 
-        version_match = re.search(r"version:\s*(\d+)", output)
-        commit_match = re.search(r"\(([a-f0-9]{7,})\)", output)
-        return {
-            "version": version_match.group(1) if version_match else "unknown",
-            "commit": commit_match.group(1) if commit_match else "unknown",
-            "raw": output,
-        }
-    except Exception:
-        return {}
+    return {}

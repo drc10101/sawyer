@@ -155,12 +155,11 @@ class TestGetBinaryInfo:
             assert result["commit"] == "ba09fc5"
 
     def test_empty_output(self):
-        """Gracefully handle empty version output — returns unknowns."""
+        """Gracefully handle empty version output — returns empty dict."""
         mock_run = MagicMock(return_value=MagicMock(stdout="", stderr=""))
         with patch("subprocess.run", mock_run):
             result = get_binary_info(Path("/fake/binary"))
-            assert result["version"] == "unknown"
-            assert result["commit"] == "unknown"
+            assert result == {}
 
     def test_subprocess_error(self):
         """Gracefully handle subprocess errors."""

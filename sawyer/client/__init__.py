@@ -119,6 +119,7 @@ class LocalInference:
         """Query all backends for available models.
 
         Results are cached for 5 minutes. Use force=True to refresh immediately.
+        Probes all backends concurrently for fast discovery (~1s vs ~12s sequential).
         """
         now = time.time()
         if (
@@ -131,26 +132,40 @@ class LocalInference:
         models: list[DiscoveredModel] = []
         logger.info("Discovering models from local backends...")
 
-        # Try Ollama
-        ollama_models = self._discover_ollama_models()
-        if ollama_models is not None:
-            models.extend(ollama_models)
-            logger.info(f"  Ollama: {len(ollama_models)} models found")
-        else:
-            logger.info("  Ollama: not available")
+        # Probe all backends concurrently
+        from concurrent.futures import ThreadPoolExecutor, as_completed
 
-        # Try llama.cpp / vLLM / LM Studio (all OpenAI-compatible)
-        for backend_name, url in [
-            ("llama_cpp", self._llama_url),
-            ("vllm", self._vllm_url),
-            ("lm_studio", self._lm_studio_url),
-        ]:
-            discovered = self._discover_openai_compatible_models(backend_name, url)
-            if discovered is not None:
-                models.extend(discovered)
-                logger.info(f"  {backend_name}: {len(discovered)} models found")
+        backend_tasks = {
+            "ollama": (self._discover_ollama_models,),
+            "llama_cpp": (self._discover_openai_compatible_models, "llama_cpp", self._llama_url),
+            "vllm": (self._discover_openai_compatible_models, "vllm", self._vllm_url),
+            "lm_studio": (self._discover_openai_compatible_models, "lm_studio", self._lm_studio_url),
+        }
+
+        def _run_task(name, task_tuple):
+            if name == "ollama":
+                return name, task_tuple[0]()
             else:
-                logger.info(f"  {backend_name}: not available at {url}")
+                func, bname, url = task_tuple
+                return name, func(bname, url)
+
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            futures = {
+                pool.submit(_run_task, name, task): name
+                for name, task in backend_tasks.items()
+            }
+            for future in as_completed(futures):
+                name = futures[future]
+                try:
+                    backend_name, discovered = future.result(timeout=5)
+                except Exception as exc:
+                    logger.debug(f"  {name}: discovery failed ({exc})")
+                    continue
+                if discovered is not None:
+                    models.extend(discovered)
+                    logger.info(f"  {backend_name}: {len(discovered)} models found")
+                else:
+                    logger.info(f"  {name}: not available")
 
         self._discovered_models = models
         self._last_discovery_time = now
@@ -196,7 +211,7 @@ class LocalInference:
         try:
             import httpx
 
-            with httpx.Client(timeout=3) as client:
+            with httpx.Client(timeout=httpx.Timeout(1.0, connect=1.0)) as client:
                 resp = client.get(f"{url}/v1/models")
                 if resp.status_code != 200:
                     return None
@@ -781,28 +796,41 @@ class LocalInference:
     # ── Backend Status ────────────────────────────────────────────
 
     def is_available(self) -> dict[str, bool]:
-        """Check which local backends are reachable."""
-        available = {}
+        """Check which local backends are reachable (concurrent, fast)."""
+        from concurrent.futures import ThreadPoolExecutor
+
         import httpx
 
-        with httpx.Client(timeout=3) as client:
-            for url, name in [
-                (self._llama_url, "llama_cpp"),
-                (self._ollama_url, "ollama"),
-                (self._vllm_url, "vllm"),
-                (self._lm_studio_url, "lm_studio"),
-            ]:
-                try:
-                    # llama.cpp uses /health, Ollama uses root, others use /v1/models
+        def _check(url: str, name: str) -> tuple[str, bool]:
+            try:
+                timeout = httpx.Timeout(2.0, connect=1.0)
+                with httpx.Client(timeout=timeout) as client:
                     if name == "llama_cpp":
                         resp = client.get(f"{url}/health")
                     elif name == "ollama":
                         resp = client.get(url)
                     else:
                         resp = client.get(f"{url}/v1/models")
-                    available[name] = resp.status_code == 200
+                    return name, resp.status_code == 200
+            except Exception:
+                return name, False
+
+        backends = [
+            (self._llama_url, "llama_cpp"),
+            (self._ollama_url, "ollama"),
+            (self._vllm_url, "vllm"),
+            (self._lm_studio_url, "lm_studio"),
+        ]
+
+        available = {}
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            futures = [pool.submit(_check, url, name) for url, name in backends]
+            for future in futures:
+                try:
+                    name, ok = future.result(timeout=3)
+                    available[name] = ok
                 except Exception:
-                    available[name] = False
+                    pass
 
         return available
 
