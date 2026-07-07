@@ -6,6 +6,7 @@ Usage:
     sawyer run            One command: start Sawyer + Ollama + agent
     sawyer chat           Start the consumer chat client (web UI + API)
     sawyer bench          Benchmark MoE prefill speedup (before/after)
+    sawyer fast-llama     Download Sawyer Fast Llama (optimized binary)
     sawyer status         Show network status and token balance
     sawyer models         List available models and expert layouts
     sawyer download       Download model weights to local cache
@@ -24,6 +25,7 @@ import httpx
 
 from sawyer.bench import cmd_bench
 from sawyer.config import SawyerConfig
+from sawyer.download import ensure_llama_bench, get_binary_info
 from sawyer.model.registry import get_model, list_models
 from sawyer.node.agent import SawyerNode
 from sawyer.node.weights import WeightLoader
@@ -534,6 +536,28 @@ def cmd_download(args) -> int:
     return 0
 
 
+def cmd_fast_llama(args) -> int:
+    """Download or update the Sawyer Fast Llama binary.
+
+    Downloads the optimized llama.cpp binary from GitHub Releases to
+    ~/.sawyer/bin/. This binary includes MoE prefill optimizations
+    (pinned mmap + expert prefetch) for faster inference on MoE models.
+    """
+    try:
+        binary = ensure_llama_bench(force=args.force)
+        print(f"  Sawyer Fast Llama installed: {binary}")
+        info = get_binary_info(binary)
+        if info:
+            print(f"  Version: {info.get('version', 'unknown')}")
+            print(f"  Commit:  {info.get('commit', 'unknown')}")
+        print()
+        print("  Run 'sawyer bench -m model.gguf' to benchmark MoE speedup.")
+        return 0
+    except Exception as e:
+        print(f"  Error: {e}", file=sys.stderr)
+        return 1
+
+
 def cmd_extract(args) -> int:
     """Extract per-expert weight shards from a GGUF model.
 
@@ -989,6 +1013,17 @@ def main() -> int:
     dl_parser.add_argument("--force", action="store_true", help="Re-download even if cached")
     dl_parser.add_argument("--no-verify", action="store_true", help="Skip SHA-256 verification")
 
+    # fast-llama
+    fl_parser = subparsers.add_parser(
+        "fast-llama",
+        help="Download Sawyer Fast Llama (optimized llama.cpp binary)",
+    )
+    fl_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Re-download even if already installed",
+    )
+
     # extract
     extract_parser = subparsers.add_parser(
         "extract",
@@ -1091,6 +1126,7 @@ def main() -> int:
         "status": cmd_status,
         "models": cmd_models,
         "download": cmd_download,
+        "fast-llama": cmd_fast_llama,
         "extract": cmd_extract,
         "account": cmd_account,
         "quota": cmd_quota,

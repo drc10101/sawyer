@@ -52,6 +52,7 @@ def find_llama_bench(binary_path: str | None = None) -> Path:
     2. Next to the current Python executable (same venv/bin dir)
     3. On PATH
     4. In ~/.sawyer/bin/
+    5. Auto-download from GitHub Releases (Sawyer Fast Llama)
     """
     if binary_path:
         p = Path(binary_path)
@@ -75,11 +76,25 @@ def find_llama_bench(binary_path: str | None = None) -> Path:
     if sawyer_bin.is_file():
         return sawyer_bin
 
-    raise FileNotFoundError(
-        f"Cannot find {BINARY_NAME}. Install Sawyer's optimized llama.cpp "
-        f"binary or specify path with --binary.\n"
-        f"Searched: {python_dir}, PATH, ~/.sawyer/bin/"
-    )
+    # Auto-download Sawyer Fast Llama
+    from sawyer.download import ensure_llama_bench
+
+    print("  llama-bench not found locally. Downloading Sawyer Fast Llama...")
+    try:
+        downloaded = ensure_llama_bench()
+        # ensure_llama_bench downloads to sawyer-fast-llama-<platform>
+        # and creates a llama-bench symlink — re-check
+        if sawyer_bin.is_file():
+            return sawyer_bin
+        return downloaded
+    except RuntimeError as e:
+        raise FileNotFoundError(
+            f"Cannot find {BINARY_NAME} and auto-download failed.\n"
+            f"  {e}\n\n"
+            f"Install Sawyer Fast Llama manually:\n"
+            f"  https://github.com/drc10101/llama.cpp/releases\n"
+            f"Or specify path with --binary"
+        ) from e
 
 
 def parse_llama_bench_output(output: str) -> list[BenchResult]:
