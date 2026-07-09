@@ -125,7 +125,7 @@ class TestSawyerStorage:
 
         balance = TokenBalance(
             tier=SubscriptionTier.EXPLORER,
-            monthly_budget=500_000,
+            monthly_budget=2_000_000,
             current_balance=400_000,
             rollover=50_000,
         )
@@ -231,7 +231,7 @@ class TestPersistedAccountant:
     def test_create_account_persists(self):
         """Created account is persisted to SQLite."""
         account = self.accountant.create_account("user-1", SubscriptionTier.EXPLORER)
-        assert account.balance.total_available == 500_000
+        assert account.balance.total_available == 2_000_000
 
         # Verify in database directly
         loaded = self.storage.load_account("user-1")
@@ -260,7 +260,7 @@ class TestPersistedAccountant:
 
         # Verify balance updated in database
         loaded = self.storage.load_account("user-1")
-        assert loaded.balance.current_balance == 500_000 - 500
+        assert loaded.balance.current_balance == 2_000_000 - 500
 
     def test_host_earnings_persist(self):
         """Host earnings are persisted to SQLite."""
@@ -283,13 +283,13 @@ class TestPersistedAccountant:
 
     def test_survives_restart(self):
         """Account state survives a database reload."""
-        self.accountant.create_account("user-1", SubscriptionTier.BUILDER)
+        self.accountant.create_account("user-1", SubscriptionTier.PRO)
         self.accountant.record_inference(
             user_id="user-1",
             model_name="mixtral-8x7b",
             expert_ids=[0],
-            input_tokens=500_000,
-            output_tokens=500_000,
+            input_tokens=2_000_000,
+            output_tokens=2_000_000,
             latency_ms=100.0,
         )
 

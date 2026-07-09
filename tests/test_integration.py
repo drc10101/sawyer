@@ -74,7 +74,7 @@ class TestEndToEndInference:
         accountant = TokenAccountant()
 
         # Create user account
-        account = accountant.create_account("user-1", SubscriptionTier.EXPLORER)
+        account = accountant.create_account("user-1", SubscriptionTier.PRO)
         initial_balance = account.balance.total_available
 
         # Record inference
@@ -102,7 +102,7 @@ class TestEndToEndInference:
     def test_insufficient_tokens_blocks_inference(self):
         """Inference is blocked when user has insufficient tokens."""
         accountant = TokenAccountant()
-        accountant.create_account("user-1", SubscriptionTier.EXPLORER)
+        accountant.create_account("user-1", SubscriptionTier.PRO)
 
         # Use up all tokens
         accountant.record_inference(
@@ -132,15 +132,15 @@ class TestEndToEndInference:
     def test_rollover_across_billing_cycles(self):
         """Unused tokens roll over at billing cycle boundary."""
         accountant = TokenAccountant()
-        accountant.create_account("user-1", SubscriptionTier.BUILDER)
+        accountant.create_account("user-1", SubscriptionTier.PRO)
 
         # Use 1M of 2M tokens
         accountant.record_inference(
             user_id="user-1",
             model_name="mixtral-8x7b",
             expert_ids=[0],
-            input_tokens=500_000,
-            output_tokens=500_000,
+            input_tokens=2_000_000,
+            output_tokens=2_000_000,
             latency_ms=100.0,
             node_id="node-a",
         )
@@ -154,15 +154,15 @@ class TestEndToEndInference:
     def test_rollover_cap_enforced(self):
         """Rollover is capped at MAX_ROLLOVER for the tier."""
         accountant = TokenAccountant()
-        accountant.create_account("user-1", SubscriptionTier.BUILDER, rollover=5_000_000)
+        accountant.create_account("user-1", SubscriptionTier.PRO, rollover=5_000_000)
 
         account = accountant.get_account("user-1")
-        assert account.balance.rollover == MAX_ROLLOVER[SubscriptionTier.BUILDER]
+        assert account.balance.rollover == MAX_ROLLOVER[SubscriptionTier.PRO]
 
     def test_host_earnings_tracked(self):
         """Hosting node earns credits for tokens served."""
         accountant = TokenAccountant()
-        accountant.create_account("user-1", SubscriptionTier.EXPLORER)
+        accountant.create_account("user-1", SubscriptionTier.PRO)
 
         accountant.record_inference(
             user_id="user-1",
@@ -324,7 +324,7 @@ class TestEndToEndTierSystem:
     def test_token_debit_updates_all_fields(self):
         """Debiting tokens updates balance, used count, and inferences."""
         accountant = TokenAccountant()
-        accountant.create_account("user-1", SubscriptionTier.EXPLORER)
+        accountant.create_account("user-1", SubscriptionTier.PRO)
 
         accountant.record_inference(
             user_id="user-1",
@@ -336,7 +336,7 @@ class TestEndToEndTierSystem:
         )
 
         account = accountant.get_account("user-1")
-        assert account.balance.current_balance == 500_000 - 150
+        assert account.balance.current_balance == 2_000_000 - 150
         assert account.total_tokens_used == 150
         assert account.total_inferences == 1
         assert account.last_inference_at > 0
@@ -349,13 +349,13 @@ class TestEndToEndMultipleUsers:
         """Multiple users with different tiers operate independently."""
         accountant = TokenAccountant()
 
-        accountant.create_account("explorer-user", SubscriptionTier.EXPLORER)
-        accountant.create_account("builder-user", SubscriptionTier.BUILDER)
-        accountant.create_account("operator-user", SubscriptionTier.OPERATOR)
+        accountant.create_account("pro-user", SubscriptionTier.PRO)
+        accountant.create_account("pro-user", SubscriptionTier.PRO)
+        accountant.create_account("enterprise-user", SubscriptionTier.ENTERPRISE)
 
         # Explorer: 500K tokens
         accountant.record_inference(
-            user_id="explorer-user",
+            user_id="pro-user",
             model_name="mixtral-8x7b",
             expert_ids=[0],
             input_tokens=100,
@@ -365,7 +365,7 @@ class TestEndToEndMultipleUsers:
 
         # Builder: 2M tokens
         accountant.record_inference(
-            user_id="builder-user",
+            user_id="pro-user",
             model_name="mixtral-8x7b",
             expert_ids=[0, 2],
             input_tokens=1000,
@@ -375,7 +375,7 @@ class TestEndToEndMultipleUsers:
 
         # Operator: 5M tokens
         accountant.record_inference(
-            user_id="operator-user",
+            user_id="enterprise-user",
             model_name="mixtral-8x7b",
             expert_ids=[0, 2, 4],
             input_tokens=5000,
@@ -386,10 +386,10 @@ class TestEndToEndMultipleUsers:
         summaries = accountant.get_all_summaries()
         assert len(summaries) == 3
 
-        explorer = accountant.get_account("explorer-user")
-        builder = accountant.get_account("builder-user")
-        operator = accountant.get_account("operator-user")
+        explorer = accountant.get_account("pro-user")
+        builder = accountant.get_account("pro-user")
+        operator = accountant.get_account("enterprise-user")
 
-        assert explorer.balance.total_available == 500_000 - 150
+        assert explorer.balance.total_available == 2_000_000 - 150
         assert builder.balance.total_available == 2_000_000 - 1500
         assert operator.balance.total_available == 5_000_000 - 7000

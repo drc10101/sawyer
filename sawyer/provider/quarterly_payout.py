@@ -1,7 +1,7 @@
 """Sawyer Quarterly Payout — distribute the provider pool and pay providers.
 
 Pool calculation:
-    total_subscribers x $5 x 0.70 = provider_pool
+    total_subscribers x avg_price x 0.70 = provider_pool
 
 Distribution:
     Each provider's share = (their weighted_contribution / total_weighted) x pool
@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 # ── Constants ──────────────────────────────────────────────────────
 
-SUBSCRIPTION_PRICE = 5.00  # $5/month
+SUBSCRIPTION_PRICE = 15.00  # Average price per month (Pro $15)
 PROVIDER_SHARE = 0.70  # 70% to providers
 MIN_PAYOUT_USD = 25.00  # Minimum payout per quarter
 QUARTERS = {
@@ -105,7 +105,7 @@ class QuarterlyPayout:
 
     Each quarter:
     1. Count total subscribers
-    2. Calculate provider pool = subscribers x $5/month x 3 months x 70%
+    2. Calculate provider pool = subscribers x avg_price x 3 months x 70%
     3. Distribute pool proportionally by weighted contribution
     4. Queue payouts above $25 minimum
     5. Roll over balances below $25 to next quarter

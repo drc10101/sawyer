@@ -29,7 +29,7 @@ def pipeline(config):
 @pytest.fixture
 def alice_balance():
     return TokenBalance(
-        tier=SubscriptionTier.BUILDER,
+        tier=SubscriptionTier.PRO,
         monthly_budget=2_000_000,
         current_balance=2_000_000,
     )
@@ -54,7 +54,7 @@ class TestInferencePipeline:
 
     def test_get_or_create_account(self, pipeline):
         account = pipeline.get_or_create_account("bob", "builder")
-        assert account.tier == SubscriptionTier.BUILDER
+        assert account.tier == SubscriptionTier.PRO
         assert account.balance.current_balance == 2_000_000
 
         # Second call returns same account
@@ -118,7 +118,7 @@ class TestInferencePipeline:
         """Inference with zero balance should return failed status."""
         balance = TokenBalance(
             tier=SubscriptionTier.EXPLORER,
-            monthly_budget=500_000,
+            monthly_budget=2_000_000,
             current_balance=0,
         )
         pipeline.set_token_balance("broke_user", balance)
@@ -318,7 +318,7 @@ class TestInferencePipeline:
         # Create an account with minimal tokens
         balance = TokenBalance(
             tier=SubscriptionTier.EXPLORER,
-            monthly_budget=500_000,
+            monthly_budget=2_000_000,
             current_balance=5,  # Almost nothing
         )
         pipeline.set_token_balance("broke", balance)

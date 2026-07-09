@@ -6,7 +6,7 @@ The load is split. Friends help.
 Sawyer distributes Mixture-of-Experts model inference across a network of
 volunteer-hosted nodes. Each node hosts one or more expert weight files, and
 a central router activates only the relevant experts per token. Users pay a
-low monthly subscription ($5/mo) for a token budget — cheap enough to
+low monthly subscription ($15/mo) for a token budget — cheap enough to
 experiment, paid enough to sustain the network. Hosts earn credits
 proportional to compute contributed.
 

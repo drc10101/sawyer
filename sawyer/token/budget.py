@@ -7,29 +7,33 @@ from enum import Enum
 class SubscriptionTier(Enum):
     """Sawyer subscription tiers."""
 
-    EXPLORER = "explorer"  # $5/mo — 500K tokens
-    BUILDER = "builder"  # $20/mo — 2M tokens
-    OPERATOR = "operator"  # $50/mo — 5M tokens
+    EXPLORER = "explorer"  # Free trial — unlimited tokens
+    PRO = "pro"  # $15/mo — 2M tokens
+    PIONEER = "pioneer"  # $40/mo — 5M tokens
+    ENTERPRISE = "enterprise"  # $100/mo — 25M tokens
 
 
 # Token budgets per tier (monthly)
 TIER_TOKENS = {
-    SubscriptionTier.EXPLORER: 500_000,
-    SubscriptionTier.BUILDER: 2_000_000,
-    SubscriptionTier.OPERATOR: 5_000_000,
+    SubscriptionTier.EXPLORER: 0,  # Unlimited during trial
+    SubscriptionTier.PRO: 2_000_000,
+    SubscriptionTier.PIONEER: 5_000_000,
+    SubscriptionTier.ENTERPRISE: 25_000_000,
 }
 
 TIER_PRICING = {
-    SubscriptionTier.EXPLORER: 5,
-    SubscriptionTier.BUILDER: 20,
-    SubscriptionTier.OPERATOR: 50,
+    SubscriptionTier.EXPLORER: 0,  # Free trial
+    SubscriptionTier.PRO: 15,
+    SubscriptionTier.PIONEER: 40,
+    SubscriptionTier.ENTERPRISE: 100,
 }
 
 # Maximum token rollover (1 month's worth)
 MAX_ROLLOVER = {
-    SubscriptionTier.EXPLORER: 500_000,
-    SubscriptionTier.BUILDER: 2_000_000,
-    SubscriptionTier.OPERATOR: 5_000_000,
+    SubscriptionTier.EXPLORER: 0,
+    SubscriptionTier.PRO: 2_000_000,
+    SubscriptionTier.PIONEER: 5_000_000,
+    SubscriptionTier.ENTERPRISE: 25_000_000,
 }
 
 

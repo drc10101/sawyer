@@ -318,17 +318,17 @@ class TestSawyerNode:
 class TestTokenBalance:
     def test_explorer_tier(self):
         balance = TokenBalance(
-            tier=SubscriptionTier.EXPLORER,
-            monthly_budget=500_000,
-            current_balance=500_000,
+            tier=SubscriptionTier.PRO,
+            monthly_budget=2_000_000,
+            current_balance=2_000_000,
         )
-        assert balance.total_available == 500_000
+        assert balance.total_available == 2_000_000
 
     def test_debit_from_monthly(self):
         balance = TokenBalance(
-            tier=SubscriptionTier.EXPLORER,
-            monthly_budget=500_000,
-            current_balance=500_000,
+            tier=SubscriptionTier.PRO,
+            monthly_budget=2_000_000,
+            current_balance=2_000_000,
         )
         remaining = balance.debit(100_000)
         assert remaining == 400_000
@@ -336,21 +336,21 @@ class TestTokenBalance:
 
     def test_debit_uses_rollover_first(self):
         balance = TokenBalance(
-            tier=SubscriptionTier.EXPLORER,
-            monthly_budget=500_000,
-            current_balance=500_000,
+            tier=SubscriptionTier.PRO,
+            monthly_budget=2_000_000,
+            current_balance=2_000_000,
             rollover=50_000,
         )
         total_before = balance.total_available
         remaining = balance.debit(30_000)
         assert remaining == total_before - 30_000
         assert balance.rollover == 20_000
-        assert balance.current_balance == 500_000
+        assert balance.current_balance == 2_000_000
 
     def test_debit_insufficient(self):
         balance = TokenBalance(
-            tier=SubscriptionTier.EXPLORER,
-            monthly_budget=500_000,
+            tier=SubscriptionTier.PRO,
+            monthly_budget=2_000_000,
             current_balance=100_000,
         )
         with pytest.raises(ValueError, match="Insufficient"):
@@ -358,13 +358,13 @@ class TestTokenBalance:
 
     def test_credit_rollover(self):
         balance = TokenBalance(
-            tier=SubscriptionTier.EXPLORER,
-            monthly_budget=500_000,
+            tier=SubscriptionTier.PRO,
+            monthly_budget=2_000_000,
             current_balance=200_000,
         )
         balance.credit_rollover()
         assert balance.rollover == 200_000
-        assert balance.current_balance == 500_000
+        assert balance.current_balance == 2_000_000
 
 
 class TestHostEarnings:
@@ -383,19 +383,25 @@ class TestHostEarnings:
 
 class TestTierPricing:
     def test_explorer_price(self):
-        assert TIER_PRICING[SubscriptionTier.EXPLORER] == 5
+        assert TIER_PRICING[SubscriptionTier.EXPLORER] == 0
 
-    def test_builder_price(self):
-        assert TIER_PRICING[SubscriptionTier.BUILDER] == 20
+    def test_pro_price(self):
+        assert TIER_PRICING[SubscriptionTier.PRO] == 15
 
-    def test_operator_price(self):
-        assert TIER_PRICING[SubscriptionTier.OPERATOR] == 50
+    def test_pioneer_price(self):
+        assert TIER_PRICING[SubscriptionTier.PIONEER] == 40
+
+    def test_enterprise_price(self):
+        assert TIER_PRICING[SubscriptionTier.ENTERPRISE] == 100
 
     def test_explorer_tokens(self):
-        assert TIER_TOKENS[SubscriptionTier.EXPLORER] == 500_000
+        assert TIER_TOKENS[SubscriptionTier.EXPLORER] == 0
 
-    def test_builder_tokens(self):
-        assert TIER_TOKENS[SubscriptionTier.BUILDER] == 2_000_000
+    def test_pro_tokens(self):
+        assert TIER_TOKENS[SubscriptionTier.PRO] == 2_000_000
 
-    def test_operator_tokens(self):
-        assert TIER_TOKENS[SubscriptionTier.OPERATOR] == 5_000_000
+    def test_pioneer_tokens(self):
+        assert TIER_TOKENS[SubscriptionTier.PIONEER] == 5_000_000
+
+    def test_enterprise_tokens(self):
+        assert TIER_TOKENS[SubscriptionTier.ENTERPRISE] == 25_000_000

@@ -8,9 +8,10 @@ Maps Sawyer subscription tiers to Stripe prices and handles:
 - Token quota enforcement via Stripe metadata
 
 Stripe prices are looked up by environment variable per tier:
-  SAWYER_STRIPE_PRICE_EXPLORER  → Explorer ($5/mo, 500K tokens)
-  SAWYER_STRIPE_PRICE_BUILDER   → Builder ($20/mo, 2M tokens)
-  SAWYER_STRIPE_PRICE_OPERATOR  → Operator ($50/mo, 5M tokens)
+  SAWYER_STRIPE_PRICE_EXPLORER  → Explorer (free trial, unlimited tokens)
+  SAWYER_STRIPE_PRICE_PRO       → Pro ($15/mo, 2M tokens)
+  SAWYER_STRIPE_PRICE_PIONEER   → Pioneer ($40/mo, 5M tokens)
+  SAWYER_STRIPE_PRICE_ENTERPRISE → Enterprise ($100/mo, 25M tokens)
 """
 
 import logging
@@ -45,15 +46,17 @@ class SawyerStripe:
     Requires environment variables:
       STRIPE_SECRET_KEY — Stripe secret key
       SAWYER_STRIPE_PRICE_EXPLORER — Stripe price ID for Explorer tier
-      SAWYER_STRIPE_PRICE_BUILDER — Stripe price ID for Builder tier
-      SAWYER_STRIPE_PRICE_OPERATOR — Stripe price ID for Operator tier
+      SAWYER_STRIPE_PRICE_PRO — Stripe price ID for Pro tier
+      SAWYER_STRIPE_PRICE_PIONEER — Stripe price ID for Pioneer tier
+      SAWYER_STRIPE_PRICE_ENTERPRISE — Stripe price ID for Enterprise tier
     """
 
     # Map Sawyer tiers to environment variable names for Stripe price IDs
     TIER_PRICE_ENV = {
         SubscriptionTier.EXPLORER: "SAWYER_STRIPE_PRICE_EXPLORER",
-        SubscriptionTier.BUILDER: "SAWYER_STRIPE_PRICE_BUILDER",
-        SubscriptionTier.OPERATOR: "SAWYER_STRIPE_PRICE_OPERATOR",
+        SubscriptionTier.PRO: "SAWYER_STRIPE_PRICE_PRO",
+        SubscriptionTier.PIONEER: "SAWYER_STRIPE_PRICE_PIONEER",
+        SubscriptionTier.ENTERPRISE: "SAWYER_STRIPE_PRICE_ENTERPRISE",
     }
 
     def __init__(self, stripe_secret_key: str | None = None) -> None:

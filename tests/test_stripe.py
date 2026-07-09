@@ -27,14 +27,14 @@ class TestSawyerStripeInit:
         """Price IDs are loaded from environment variables."""
         env = {
             "SAWYER_STRIPE_PRICE_EXPLORER": "price_explorer",
-            "SAWYER_STRIPE_PRICE_BUILDER": "price_builder",
-            "SAWYER_STRIPE_PRICE_OPERATOR": "price_operator",
+            "SAWYER_STRIPE_PRICE_PRO": "price_pro",
+            "SAWYER_STRIPE_PRICE_ENTERPRISE": "price_enterprise",
         }
         with patch.dict(os.environ, env, clear=True):
             ss = SawyerStripe(stripe_secret_key="sk_test")
             assert ss.get_price_id(SubscriptionTier.EXPLORER) == "price_explorer"
-            assert ss.get_price_id(SubscriptionTier.BUILDER) == "price_builder"
-            assert ss.get_price_id(SubscriptionTier.OPERATOR) == "price_operator"
+            assert ss.get_price_id(SubscriptionTier.PRO) == "price_pro"
+            assert ss.get_price_id(SubscriptionTier.ENTERPRISE) == "price_enterprise"
 
     def test_missing_price_ids(self):
         """Missing price IDs return None."""
@@ -107,12 +107,12 @@ class TestSawyerStripeSubscription:
             user_id="user-1",
             stripe_customer_id="cus_123",
             stripe_subscription_id="sub_456",
-            tier=SubscriptionTier.BUILDER,
+            tier=SubscriptionTier.PRO,
             status="active",
             current_period_end=1700000000,
-            token_budget=TIER_TOKENS[SubscriptionTier.BUILDER],
+            token_budget=TIER_TOKENS[SubscriptionTier.PRO],
         )
-        assert sub.tier == SubscriptionTier.BUILDER
+        assert sub.tier == SubscriptionTier.PRO
         assert sub.token_budget == 2_000_000
         assert sub.tokens_used == 0
 
@@ -132,12 +132,12 @@ class TestSawyerStripeSubscription:
             "status": "active",
         }[key]
 
-        env = {"SAWYER_STRIPE_PRICE_BUILDER": "price_builder"}
+        env = {"SAWYER_STRIPE_PRICE_PRO": "price_pro"}
         with patch.dict(os.environ, env, clear=True):
             ss = SawyerStripe(stripe_secret_key="sk_test")
             sub = ss.get_subscription("sub_789")
             assert sub is not None
-            assert sub.tier == SubscriptionTier.BUILDER
+            assert sub.tier == SubscriptionTier.PRO
 
 
 class TestSawyerStripePortal:
@@ -164,12 +164,14 @@ class TestSawyerStripeTiers:
 
     def test_tier_pricing_matches(self):
         """SawyerStripe tier prices match Sawyer budget module."""
-        assert TIER_PRICING[SubscriptionTier.EXPLORER] == 5
-        assert TIER_PRICING[SubscriptionTier.BUILDER] == 20
-        assert TIER_PRICING[SubscriptionTier.OPERATOR] == 50
+        assert TIER_PRICING[SubscriptionTier.EXPLORER] == 0
+        assert TIER_PRICING[SubscriptionTier.PRO] == 15
+        assert TIER_PRICING[SubscriptionTier.PIONEER] == 40
+        assert TIER_PRICING[SubscriptionTier.ENTERPRISE] == 100
 
     def test_tier_tokens_match(self):
         """SawyerStripe token budgets match Sawyer budget module."""
-        assert TIER_TOKENS[SubscriptionTier.EXPLORER] == 500_000
-        assert TIER_TOKENS[SubscriptionTier.BUILDER] == 2_000_000
-        assert TIER_TOKENS[SubscriptionTier.OPERATOR] == 5_000_000
+        assert TIER_TOKENS[SubscriptionTier.EXPLORER] == 0
+        assert TIER_TOKENS[SubscriptionTier.PRO] == 2_000_000
+        assert TIER_TOKENS[SubscriptionTier.PIONEER] == 5_000_000
+        assert TIER_TOKENS[SubscriptionTier.ENTERPRISE] == 25_000_000

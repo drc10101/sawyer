@@ -19,28 +19,28 @@ class TestTokenAccountant:
 
     def test_create_account(self):
         """Create an account with Explorer tier."""
-        account = self.accountant.create_account("user-1", SubscriptionTier.EXPLORER)
+        account = self.accountant.create_account("user-1", SubscriptionTier.PRO)
         assert account.user_id == "user-1"
-        assert account.tier == SubscriptionTier.EXPLORER
-        assert account.balance.total_available == 500_000
+        assert account.tier == SubscriptionTier.PRO
+        assert account.balance.total_available == 2_000_000
         assert account.total_tokens_used == 0
 
     def test_create_account_with_rollover(self):
         """Create an account with rollover tokens."""
         account = self.accountant.create_account(
-            "user-2", SubscriptionTier.BUILDER, rollover=100_000
+            "user-2", SubscriptionTier.PRO, rollover=100_000
         )
         assert account.balance.total_available == 2_100_000  # 2M + 100K
 
     def test_create_account_duplicate_raises(self):
         """Creating a duplicate account raises AccountingError."""
-        self.accountant.create_account("user-1", SubscriptionTier.EXPLORER)
+        self.accountant.create_account("user-1", SubscriptionTier.PRO)
         with pytest.raises(AccountingError, match="already exists"):
-            self.accountant.create_account("user-1", SubscriptionTier.BUILDER)
+            self.accountant.create_account("user-1", SubscriptionTier.PRO)
 
     def test_get_account(self):
         """Get an existing account."""
-        self.accountant.create_account("user-1", SubscriptionTier.EXPLORER)
+        self.accountant.create_account("user-1", SubscriptionTier.PRO)
         account = self.accountant.get_account("user-1")
         assert account is not None
         assert account.user_id == "user-1"
@@ -51,7 +51,7 @@ class TestTokenAccountant:
 
     def test_record_inference(self):
         """Record an inference and debit tokens."""
-        self.accountant.create_account("user-1", SubscriptionTier.EXPLORER)
+        self.accountant.create_account("user-1", SubscriptionTier.PRO)
         record = self.accountant.record_inference(
             user_id="user-1",
             model_name="mixtral-8x7b",
@@ -67,19 +67,19 @@ class TestTokenAccountant:
 
         # Check balance was debited
         account = self.accountant.get_account("user-1")
-        assert account.balance.total_available == 500_000 - 150
+        assert account.balance.total_available == 2_000_000 - 150
         assert account.total_tokens_used == 150
         assert account.total_inferences == 1
 
     def test_record_inference_insufficient_tokens(self):
         """Raise InsufficientTokens when balance is too low."""
-        self.accountant.create_account("user-1", SubscriptionTier.EXPLORER)
+        self.accountant.create_account("user-1", SubscriptionTier.PRO)
         with pytest.raises(InsufficientTokens):
             self.accountant.record_inference(
                 user_id="user-1",
                 model_name="mixtral-8x7b",
                 expert_ids=[0],
-                input_tokens=500_000,
+                input_tokens=2_000_000,
                 output_tokens=1,
                 latency_ms=100.0,
             )
@@ -99,9 +99,9 @@ class TestTokenAccountant:
     def test_uses_rollover_first(self):
         """Token debit uses rollover tokens before monthly budget."""
         account = self.accountant.create_account(
-            "user-1", SubscriptionTier.EXPLORER, rollover=500_000
+            "user-1", SubscriptionTier.PRO, rollover=2_000_000
         )
-        assert account.balance.total_available == 1_000_000  # 500K + 500K rollover
+        assert account.balance.total_available == 4_000_000  # 2M + 2M rollover
 
         self.accountant.record_inference(
             user_id="user-1",
@@ -112,16 +112,16 @@ class TestTokenAccountant:
             latency_ms=100.0,
         )
 
-        # 400K debited from rollover first
+        # 400K debited from rollover first: 2M - 400K = 1.6M remaining
         account = self.accountant.get_account("user-1")
-        assert account.balance.rollover == 100_000
-        assert account.balance.current_balance == 500_000
+        assert account.balance.rollover == 1_600_000
+        assert account.balance.current_balance == 2_000_000
 
     def test_check_quota(self):
         """Check if a user has enough tokens."""
-        self.accountant.create_account("user-1", SubscriptionTier.EXPLORER)
+        self.accountant.create_account("user-1", SubscriptionTier.PRO)
         assert self.accountant.check_quota("user-1", 100) is True
-        assert self.accountant.check_quota("user-1", 1_000_000) is False
+        assert self.accountant.check_quota("user-1", 5_000_000) is False
 
     def test_check_quota_unknown_user(self):
         """Check quota returns False for unknown user."""
@@ -129,7 +129,7 @@ class TestTokenAccountant:
 
     def test_process_billing_cycle(self):
         """Process billing cycle rolls over unused tokens."""
-        self.accountant.create_account("user-1", SubscriptionTier.EXPLORER)
+        self.accountant.create_account("user-1", SubscriptionTier.PRO)
 
         # Use some tokens
         self.accountant.record_inference(
@@ -141,15 +141,15 @@ class TestTokenAccountant:
             latency_ms=100.0,
         )
 
-        # Process billing cycle — 350K remaining rolls over
+        # Process billing cycle — 1.85M remaining rolls over
         balance = self.accountant.process_billing_cycle("user-1")
-        assert balance.rollover == 350_000
-        assert balance.current_balance == 500_000  # Reset to monthly budget
-        assert balance.total_available == 850_000
+        assert balance.rollover == 1_850_000
+        assert balance.current_balance == 2_000_000  # Reset to monthly budget
+        assert balance.total_available == 3_850_000
 
     def test_usage_summary(self):
         """Get a usage summary for a user."""
-        self.accountant.create_account("user-1", SubscriptionTier.BUILDER)
+        self.accountant.create_account("user-1", SubscriptionTier.PRO)
 
         self.accountant.record_inference(
             user_id="user-1",
@@ -161,7 +161,7 @@ class TestTokenAccountant:
         )
 
         summary = self.accountant.get_usage_summary("user-1")
-        assert summary["tier"] == "builder"
+        assert summary["tier"] == "pro"
         assert summary["tokens_used"] == 700
         assert summary["total_inferences"] == 1
         assert summary["is_active"] is True
@@ -173,15 +173,15 @@ class TestTokenAccountant:
 
     def test_get_all_summaries(self):
         """Get summaries for all users."""
-        self.accountant.create_account("user-1", SubscriptionTier.EXPLORER)
-        self.accountant.create_account("user-2", SubscriptionTier.BUILDER)
+        self.accountant.create_account("user-1", SubscriptionTier.PRO)
+        self.accountant.create_account("user-2", SubscriptionTier.PRO)
 
         summaries = self.accountant.get_all_summaries()
         assert len(summaries) == 2
 
     def test_host_earnings(self):
         """Recording inference credits the hosting node."""
-        self.accountant.create_account("user-1", SubscriptionTier.EXPLORER)
+        self.accountant.create_account("user-1", SubscriptionTier.PRO)
         self.accountant.record_inference(
             user_id="user-1",
             model_name="mixtral-8x7b",
@@ -199,7 +199,7 @@ class TestTokenAccountant:
 
     def test_host_payout_threshold(self):
         """Host earnings track eligibility for payout."""
-        self.accountant.create_account("user-1", SubscriptionTier.OPERATOR)
+        self.accountant.create_account("user-1", SubscriptionTier.ENTERPRISE)
         # Use enough tokens to accumulate earnings
         for _ in range(10):
             self.accountant.record_inference(
@@ -225,13 +225,13 @@ class TestUserAccount:
         from sawyer.token.budget import TokenBalance
 
         balance = TokenBalance(
-            tier=SubscriptionTier.EXPLORER,
-            monthly_budget=500_000,
-            current_balance=500_000,
+            tier=SubscriptionTier.PRO,
+            monthly_budget=2_000_000,
+            current_balance=2_000_000,
         )
         account = UserAccount(
             user_id="test",
-            tier=SubscriptionTier.EXPLORER,
+            tier=SubscriptionTier.PRO,
             balance=balance,
         )
         assert account.is_active is True
@@ -241,13 +241,13 @@ class TestUserAccount:
         from sawyer.token.budget import TokenBalance
 
         balance = TokenBalance(
-            tier=SubscriptionTier.EXPLORER,
-            monthly_budget=500_000,
+            tier=SubscriptionTier.PRO,
+            monthly_budget=2_000_000,
             current_balance=0,
         )
         account = UserAccount(
             user_id="test",
-            tier=SubscriptionTier.EXPLORER,
+            tier=SubscriptionTier.PRO,
             balance=balance,
         )
         assert account.is_active is False
