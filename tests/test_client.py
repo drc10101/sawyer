@@ -506,11 +506,11 @@ class TestClientAPI:
         assert "models_available" in data
 
     def test_chat_ui_served(self, client):
-        """Root endpoint returns the chat HTML."""
+        """Root endpoint returns the FAQ onboarding page."""
         resp = client.get("/")
         assert resp.status_code == 200
         assert "Sawyer" in resp.text
-        assert "Distributed MoE Inference" in resp.text
+        assert "Getting Started" in resp.text
 
     def test_models_endpoint_includes_sawyer(self, client):
         """Models endpoint always includes the 'sawyer' default model."""
@@ -785,20 +785,20 @@ class TestClientAPI:
         assert "balance" in data
 
     def test_chat_ui_has_input_area(self, client):
-        """Chat UI includes the prompt input area."""
+        """FAQ page includes install instructions."""
         resp = client.get("/")
-        assert "prompt" in resp.text
-        assert "sendMessage" in resp.text
+        assert "Install" in resp.text
+        assert "sawyer" in resp.text
 
     def test_chat_ui_has_model_select(self, client):
-        """Chat UI includes dynamic model select."""
+        """FAQ page includes status check."""
         resp = client.get("/")
-        assert "model-select" in resp.text
+        assert "checkStatus" in resp.text
 
     def test_chat_ui_has_streaming(self, client):
-        """Chat UI includes streaming support."""
+        """FAQ page includes copy-to-clipboard for commands."""
         resp = client.get("/")
-        assert "stream" in resp.text
+        assert "clipboard" in resp.text
 
     def test_503_error_includes_available_models(self, client):
         """503 error response includes available models for debugging."""
