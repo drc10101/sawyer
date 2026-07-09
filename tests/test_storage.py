@@ -124,14 +124,14 @@ class TestSawyerStorage:
         from sawyer.token.budget import TokenBalance
 
         balance = TokenBalance(
-            tier=SubscriptionTier.EXPLORER,
+            tier=SubscriptionTier.PRO,
             monthly_budget=2_000_000,
             current_balance=400_000,
             rollover=50_000,
         )
         account = UserAccount(
             user_id="user-1",
-            tier=SubscriptionTier.EXPLORER,
+            tier=SubscriptionTier.PRO,
             balance=balance,
             total_tokens_used=100_000,
             total_inferences=50,
@@ -143,7 +143,7 @@ class TestSawyerStorage:
 
         assert loaded is not None
         assert loaded.user_id == "user-1"
-        assert loaded.tier == SubscriptionTier.EXPLORER
+        assert loaded.tier == SubscriptionTier.PRO
         assert loaded.balance.current_balance == 400_000
         assert loaded.balance.rollover == 50_000
         assert loaded.total_tokens_used == 100_000
@@ -230,18 +230,18 @@ class TestPersistedAccountant:
 
     def test_create_account_persists(self):
         """Created account is persisted to SQLite."""
-        account = self.accountant.create_account("user-1", SubscriptionTier.EXPLORER)
+        account = self.accountant.create_account("user-1", SubscriptionTier.PRO)
         assert account.balance.total_available == 2_000_000
 
         # Verify in database directly
         loaded = self.storage.load_account("user-1")
         assert loaded is not None
         assert loaded.user_id == "user-1"
-        assert loaded.tier == SubscriptionTier.EXPLORER
+        assert loaded.tier == SubscriptionTier.PRO
 
     def test_inference_persists_record_and_balance(self):
         """Recording inference persists both the record and updated balance."""
-        self.accountant.create_account("user-1", SubscriptionTier.EXPLORER)
+        self.accountant.create_account("user-1", SubscriptionTier.PRO)
 
         self.accountant.record_inference(
             user_id="user-1",
@@ -264,7 +264,7 @@ class TestPersistedAccountant:
 
     def test_host_earnings_persist(self):
         """Host earnings are persisted to SQLite."""
-        self.accountant.create_account("user-1", SubscriptionTier.EXPLORER)
+        self.accountant.create_account("user-1", SubscriptionTier.PRO)
 
         self.accountant.record_inference(
             user_id="user-1",
@@ -288,8 +288,8 @@ class TestPersistedAccountant:
             user_id="user-1",
             model_name="mixtral-8x7b",
             expert_ids=[0],
-            input_tokens=2_000_000,
-            output_tokens=2_000_000,
+            input_tokens=500_000,
+            output_tokens=500_000,
             latency_ms=100.0,
         )
 
@@ -303,32 +303,32 @@ class TestPersistedAccountant:
 
     def test_billing_cycle_persists(self):
         """Billing cycle rollover is persisted."""
-        self.accountant.create_account("user-1", SubscriptionTier.EXPLORER)
+        self.accountant.create_account("user-1", SubscriptionTier.PRO)
         self.accountant.record_inference(
             user_id="user-1",
             model_name="mixtral-8x7b",
             expert_ids=[0],
-            input_tokens=200_000,
-            output_tokens=100_000,
+            input_tokens=1_500_000,
+            output_tokens=300_000,
             latency_ms=100.0,
         )
 
         self.accountant.process_billing_cycle("user-1")
 
-        # Verify rollover in database
+        # Verify rollover in database — 2M - 1.8M = 200K remaining, rolled over
         loaded = self.storage.load_account("user-1")
         assert loaded is not None
         assert loaded.balance.rollover == 200_000
 
     def test_insufficient_tokens_still_works(self):
         """InsufficientTokens exception works with persisted accountant."""
-        self.accountant.create_account("user-1", SubscriptionTier.EXPLORER)
+        self.accountant.create_account("user-1", SubscriptionTier.PRO)
         self.accountant.record_inference(
             user_id="user-1",
             model_name="mixtral-8x7b",
             expert_ids=[0],
-            input_tokens=400_000,
-            output_tokens=100_000,
+            input_tokens=1_999_999,
+            output_tokens=0,
             latency_ms=100.0,
         )
 
@@ -344,7 +344,7 @@ class TestPersistedAccountant:
 
     def test_audit_trail_on_inference(self):
         """Every inference creates an audit log entry."""
-        self.accountant.create_account("user-1", SubscriptionTier.EXPLORER)
+        self.accountant.create_account("user-1", SubscriptionTier.PRO)
         self.accountant.record_inference(
             user_id="user-1",
             model_name="mixtral-8x7b",
@@ -361,7 +361,7 @@ class TestPersistedAccountant:
 
     def test_inference_history(self):
         """get_inference_history returns records from database."""
-        self.accountant.create_account("user-1", SubscriptionTier.EXPLORER)
+        self.accountant.create_account("user-1", SubscriptionTier.PRO)
 
         for i in range(5):
             self.accountant.record_inference(

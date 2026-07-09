@@ -11,10 +11,10 @@ from sawyer.provider.quarterly_payout import (
 
 
 class TestQuarterlyPoolCalculation:
-    """Test the pool math: subscribers x $5 x 3 months x 70%."""
+    """Test the pool math: subscribers x $51.67 x 3 months x 70%."""
 
     def test_pool_calculation_1_subscriber(self):
-        """1 subscriber: $5 x 3 x 0.70 = $10.50 to providers."""
+        """1 subscriber: $51.67 x 3 x 0.70 = $108.51 to providers."""
         qp = QuarterlyPayout()
         pool = qp.calculate_quarterly_pool(total_subscribers=1)
 
@@ -69,7 +69,7 @@ class TestQuarterlyDistribution:
         )
 
         assert len(payouts) == 1
-        assert payouts[0].total_earnings_usd == pytest.approx(1050.0, abs=1.0)
+        assert payouts[0].total_earnings_usd == pytest.approx(10850.7, abs=1.0)
         assert payouts[0].share_percent == 100.0
         assert payouts[0].tier == "tier_4"
         assert payouts[0].multiplier == 4.0
@@ -129,7 +129,7 @@ class TestQuarterlyDistribution:
         assert t2.total_earnings_usd > t1.total_earnings_usd
 
         # Total distributed equals provider pool
-        pool = 5 * 50 * 3 * 0.70  # 50 subs x $5 x 3 months x 70%
+        pool = 51.67 * 50 * 3 * 0.70  # 50 subs x $51.67 x 3 months x 70%
         total_distributed = sum(p.total_earnings_usd for p in payouts)
         assert total_distributed == pytest.approx(pool, abs=1.0)
 
@@ -329,8 +329,8 @@ class TestQuarterlyPreview:
         )
 
         assert summary["total_subscribers"] == 100
-        assert summary["total_revenue_usd"] == 1500.00
-        assert summary["provider_pool_usd"] == 1050.00
+        assert summary["total_revenue_usd"] == 15501.00
+        assert summary["provider_pool_usd"] == 10850.70
         assert len(summary["providers"]) == 2
 
         # Each provider has earnings preview

@@ -124,7 +124,7 @@ class TestSawyerStripeSubscription:
             customer="cus_123",
             status="active",
             current_period_end=1700000000,
-            metadata={"sawyer_tier": "builder", "sawyer_user_id": "user-1"},
+            metadata={"sawyer_tier": "pro", "sawyer_user_id": "user-1"},
         )
         mock_retrieve.return_value.__getitem__ = lambda self, key: {
             "id": "sub_789",

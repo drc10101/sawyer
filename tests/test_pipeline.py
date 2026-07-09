@@ -53,7 +53,7 @@ class TestInferencePipeline:
         assert pipeline.get_user_balance("alice") is alice_balance
 
     def test_get_or_create_account(self, pipeline):
-        account = pipeline.get_or_create_account("bob", "builder")
+        account = pipeline.get_or_create_account("bob", "pro")
         assert account.tier == SubscriptionTier.PRO
         assert account.balance.current_balance == 2_000_000
 
@@ -97,9 +97,12 @@ class TestInferencePipeline:
         asyncio.run(pipeline.stop())
 
     def test_e2e_no_balance(self, pipeline):
-        """Inference with no token balance gets default explorer tier."""
+        """Inference with no token balance gets auto-created pro account."""
         import asyncio
         asyncio.run(pipeline.start())
+
+        # Auto-create a pro account for a new user
+        pipeline.get_or_create_account("newuser", "pro")
 
         request = InferenceRequest(
             model_name="mixtral-8x7b",
@@ -117,7 +120,7 @@ class TestInferencePipeline:
     def test_e2e_zero_balance(self, pipeline):
         """Inference with zero balance should return failed status."""
         balance = TokenBalance(
-            tier=SubscriptionTier.EXPLORER,
+            tier=SubscriptionTier.PRO,
             monthly_budget=2_000_000,
             current_balance=0,
         )
@@ -282,7 +285,7 @@ class TestInferencePipeline:
 
         summary = pipeline.accountant.get_usage_summary("alice")
         assert summary["user_id"] == "alice"
-        assert summary["tier"] == "builder"
+        assert summary["tier"] == "pro"
         assert summary["tokens_used"] > 0
         assert summary["total_inferences"] == 1
         assert summary["is_active"] is True
@@ -317,7 +320,7 @@ class TestInferencePipeline:
 
         # Create an account with minimal tokens
         balance = TokenBalance(
-            tier=SubscriptionTier.EXPLORER,
+            tier=SubscriptionTier.PRO,
             monthly_budget=2_000_000,
             current_balance=5,  # Almost nothing
         )

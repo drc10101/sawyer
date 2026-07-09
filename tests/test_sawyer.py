@@ -331,8 +331,8 @@ class TestTokenBalance:
             current_balance=2_000_000,
         )
         remaining = balance.debit(100_000)
-        assert remaining == 400_000
-        assert balance.current_balance == 400_000
+        assert remaining == 1_900_000
+        assert balance.current_balance == 1_900_000
 
     def test_debit_uses_rollover_first(self):
         balance = TokenBalance(

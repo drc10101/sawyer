@@ -21,7 +21,7 @@ class TestEarningsSync:
         self.provider_mgr.add_node(self.provider.provider_id, "node-alpha")
 
         # Create a user account for inference
-        self.accountant.create_account("user-1", SubscriptionTier.EXPLORER)
+        self.accountant.create_account("user-1", SubscriptionTier.PRO)
 
     def test_flush_host_earnings_to_provider(self):
         """Tokens served by a node credit the owning provider."""
