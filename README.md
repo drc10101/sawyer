@@ -1,12 +1,12 @@
-[![PyPI](https://img.shields.io/pypi/v/sawyer-core?color=%2312c7ef&label=pypi%3A%20sawyer-core)](https://pypi.org/project/sawyer-core/)
+<div align="center"><img src="sawyer_logo.png" alt="Sawyer Agent on Bedrock" width="800"></div>
 
 # Sawyer — Distributed MoE Inference Network
+
+[![PyPI](https://img.shields.io/pypi/v/sawyer-core?color=%2312c7ef&label=pypi%3A%20sawyer-core)](https://pypi.org/project/sawyer-core/)
 
 > **Status: Active prototype** — Provider onboarding and APIs are evolving. Sawyer is under active development toward an alpha milestone.
 
 **"The load is split. Friends help."**
-
-<div align="center"><img src="sawyer_logo.png" alt="Sawyer on Bedrock" width="600"></div>
 
 Named for Tom Sawyer, who turned an impossible chore into a community effort by making participation irresistible. Sawyer turns GPU inference — a credit-draining trap — into a distributed network where each node carries a piece of the load, and everyone benefits.
 
