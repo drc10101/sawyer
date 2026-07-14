@@ -156,12 +156,12 @@ if [ ! -f "${VENV_DIR}/bin/activate" ]; then
         PYTHON="$PYTHON"
         # Create a wrapper script instead
         mkdir -p "${BIN_DIR}"
-        cat > "${BIN_DIR}/sawyer" << 'WRAPPER'
+        cat > "${BIN_DIR}/sawyer-agent" << 'WRAPPER'
 #!/usr/bin/env bash
 exec python3 -m sawyer.cli "$@"
 WRAPPER
-        chmod +x "${BIN_DIR}/sawyer"
-        SAWYER_CMD="${BIN_DIR}/sawyer"
+        chmod +x "${BIN_DIR}/sawyer-agent"
+        SAWYER_CMD="${BIN_DIR}/sawyer-agent"
     }
 fi
 
@@ -183,13 +183,13 @@ if [ -f "${VENV_DIR}/bin/activate" ]; then
 
     # Create wrapper script pointing to venv
     mkdir -p "${BIN_DIR}"
-    cat > "${BIN_DIR}/sawyer" << WRAPPER
+    cat > "${BIN_DIR}/sawyer-agent" << WRAPPER
 #!/usr/bin/env bash
 source "${VENV_DIR}/bin/activate"
 exec python -m sawyer.cli "\$@"
 WRAPPER
-    chmod +x "${BIN_DIR}/sawyer"
-    SAWYER_CMD="${BIN_DIR}/sawyer"
+    chmod +x "${BIN_DIR}/sawyer-agent"
+    SAWYER_CMD="${BIN_DIR}/sawyer-agent"
 fi
 
 ok "sawyer-core installed"
@@ -356,28 +356,22 @@ VALIDATION_ERRORS=0
 if [ -f "${VENV_DIR}/bin/activate" ]; then
     source "${VENV_DIR}/bin/activate"
 fi
-
-if command -v sawyer &>/dev/null || [ -f "${BIN_DIR}/sawyer" ]; then
-    # Try running sawyer --help
-    SAWYER_BIN="${BIN_DIR}/sawyer"
-    if [ ! -f "$SAWYER_BIN" ]; then
-        SAWYER_BIN="$(command -v sawyer 2>/dev/null || echo sawyer)"
-    fi
-
+SAWYER_BIN="${BIN_DIR}/sawyer-agent"
+if [ -f "$SAWYER_BIN" ]; then
     VERSION_CHECK=$("$SAWYER_BIN" --help 2>&1 | head -1 || true)
     if echo "$VERSION_CHECK" | grep -qi "sawyer"; then
-        ok "sawyer command works"
+        ok "sawyer-agent command works"
     else
-        warn "sawyer command found but --help returned unexpected output"
+        warn "sawyer-agent --help returned unexpected output"
         warn "  $VERSION_CHECK"
         VALIDATION_ERRORS=$((VALIDATION_ERRORS + 1))
     fi
 else
     # Try python -m sawyer as fallback
     if $PYTHON -m sawyer.cli --help &>/dev/null; then
-        ok "sawyer works via python -m sawyer"
+        ok "sawyer-agent works via python -m sawyer"
     else
-        err "sawyer command not found and python -m sawyer failed"
+        err "sawyer-agent command not found and python -m sawyer failed"
         VALIDATION_ERRORS=$((VALIDATION_ERRORS + 1))
     fi
 fi
@@ -399,20 +393,20 @@ fi
 
 echo ""
 echo -e "  ${BOLD}Quick start:${NC}"
-echo -e "  ${CYAN}sawyer chat${NC}             Start the chat client (web UI at http://localhost:8000)"
-echo -e "  ${CYAN}sawyer serve${NC}            Start serving expert inference requests"
-echo -e "  ${CYAN}sawyer run${NC}              One command: start Sawyer + Ollama + agent"
-echo -e "  ${CYAN}sawyer bench${NC}            Benchmark MoE prefill speedup"
+echo -e "  ${CYAN}sawyer-agent chat${NC}      Start the chat client (web UI at http://localhost:8000)"
+echo -e "  ${CYAN}sawyer-agent serve${NC}     Start serving expert inference requests"
+echo -e "  ${CYAN}sawyer-agent run${NC}       One command: start Sawyer + Ollama + agent"
+echo -e "  ${CYAN}sawyer-agent bench${NC}     Benchmark MoE prefill speedup"
 echo ""
 
 if [ "$PLATFORM" = "macos" ]; then
     echo -e "  ${YELLOW}macOS: For GPU acceleration, install Ollama from https://ollama.com${NC}"
-    echo -e "  ${YELLOW}       Then: ollama pull llama3 && sawyer run${NC}"
+    echo -e "  ${YELLOW}       Then: ollama pull llama3 && sawyer-agent run${NC}"
     echo ""
 fi
 
 if [ "$VALIDATION_ERRORS" -gt 0 ]; then
-    echo -e "  ${YELLOW}If 'sawyer' command not found, run:${NC}"
+    echo -e "  ${YELLOW}If 'sawyer-agent' command not found, run:${NC}"
     echo -e "  ${CYAN}source ${SHELL_RC}${NC}"
     echo ""
 fi
