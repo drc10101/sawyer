@@ -59,6 +59,7 @@ Issues = "https://github.com/drc10101/sawyer-network/issues"
 
 [project.scripts]
 sawyer = "sawyer.cli:main"
+sawyer-agent = "sawyer.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

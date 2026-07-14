@@ -177,7 +177,7 @@ if (Test-Path (Join-Path $VenvDir "Scripts\Activate.ps1")) {
     }
 
     # Create wrapper script for PATH access
-    $sawyerWrapper = Join-Path $BinDir "sawyer.cmd"
+    $sawyerWrapper = Join-Path $BinDir "sawyer-agent.cmd"
     $sawyerWrapperContent = @"
 @echo off
 call "$VenvDir\Scripts\Activate.bat"
@@ -187,7 +187,7 @@ python -m sawyer.cli %*
     Set-Content -Path $sawyerWrapper -Value $sawyerWrapperContent -Force
 
     # Also create a PowerShell wrapper
-    $sawyerPs1 = Join-Path $BinDir "sawyer.ps1"
+    $sawyerPs1 = Join-Path $BinDir "sawyer-agent.ps1"
     $sawyerPs1Content = @"
 & "$VenvDir\Scripts\Activate.ps1"
 python -m sawyer.cli `$args
@@ -317,14 +317,14 @@ Write-Host "  Step 4/4: Validating installation..." -ForegroundColor Cyan
 
 $validationErrors = 0
 
-# Test sawyer command
-$sawyerBin = Join-Path $BinDir "sawyer.cmd"
+# Test sawyer-agent command
+$sawyerBin = Join-Path $BinDir "sawyer-agent.cmd"
 if (Test-Path $sawyerBin) {
     $helpOutput = & $sawyerBin --help 2>&1
     if ($helpOutput -match "sawyer") {
-        Write-Host "  sawyer command works" -ForegroundColor Green
+        Write-Host "  sawyer-agent command works" -ForegroundColor Green
     } else {
-        Write-Host "  WARNING: sawyer command returned unexpected output" -ForegroundColor Yellow
+        Write-Host "  WARNING: sawyer-agent command returned unexpected output" -ForegroundColor Yellow
         $validationErrors++
     }
 } else {
@@ -333,7 +333,7 @@ if (Test-Path $sawyerBin) {
         & $python -m sawyer.cli --help | Out-Null 2>&1
         Write-Host "  sawyer works via python -m sawyer" -ForegroundColor Green
     } catch {
-        Write-Host "  ERROR: sawyer command not found" -ForegroundColor Red
+        Write-Host "  ERROR: sawyer-agent command not found" -ForegroundColor Red
         $validationErrors++
     }
 }
@@ -358,13 +358,13 @@ if ($validationErrors -eq 0) {
 Write-Host ""
 Write-Host "  Quick start:" -ForegroundColor White
 Write-Host "    Desktop shortcut: double-click Sawyer" -ForegroundColor Cyan
-Write-Host "    Command line:     sawyer chat" -ForegroundColor Cyan
-Write-Host "    Serve a node:     sawyer serve" -ForegroundColor Cyan
-Write-Host "    All-in-one:       sawyer run" -ForegroundColor Cyan
+Write-Host "    Command line:     sawyer-agent chat" -ForegroundColor Cyan
+Write-Host "    Serve a node:     sawyer-agent serve" -ForegroundColor Cyan
+Write-Host "    All-in-one:       sawyer-agent run" -ForegroundColor Cyan
 Write-Host ""
 
 if ($validationErrors -gt 0) {
-    Write-Host "  If 'sawyer' command not found, restart your terminal or run:" -ForegroundColor Yellow
+    Write-Host "  If 'sawyer-agent' command not found, restart your terminal or run:" -ForegroundColor Yellow
     Write-Host "    `$env:Path = `"$BinDir;`$env:Path`"" -ForegroundColor Cyan
     Write-Host ""
 }

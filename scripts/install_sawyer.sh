@@ -156,12 +156,12 @@ if [ ! -f "${VENV_DIR}/bin/activate" ]; then
         PYTHON="$PYTHON"
         # Create a wrapper script instead
         mkdir -p "${BIN_DIR}"
-        cat > "${BIN_DIR}/sawyer" << 'WRAPPER'
+        cat > "${BIN_DIR}/sawyer-agent" << 'WRAPPER'
 #!/usr/bin/env bash
 exec python3 -m sawyer.cli "$@"
 WRAPPER
-        chmod +x "${BIN_DIR}/sawyer"
-        SAWYER_CMD="${BIN_DIR}/sawyer"
+        chmod +x "${BIN_DIR}/sawyer-agent"
+        SAWYER_CMD="${BIN_DIR}/sawyer-agent"
     }
 fi
 
@@ -183,13 +183,13 @@ if [ -f "${VENV_DIR}/bin/activate" ]; then
 
     # Create wrapper script pointing to venv
     mkdir -p "${BIN_DIR}"
-    cat > "${BIN_DIR}/sawyer" << WRAPPER
+    cat > "${BIN_DIR}/sawyer-agent" << WRAPPER
 #!/usr/bin/env bash
 source "${VENV_DIR}/bin/activate"
 exec python -m sawyer.cli "\$@"
 WRAPPER
-    chmod +x "${BIN_DIR}/sawyer"
-    SAWYER_CMD="${BIN_DIR}/sawyer"
+    chmod +x "${BIN_DIR}/sawyer-agent"
+    SAWYER_CMD="${BIN_DIR}/sawyer-agent"
 fi
 
 ok "sawyer-core installed"
@@ -227,7 +227,7 @@ PLATFORM_TAG=$(detect_platform)
 
 if [ "$PLATFORM_TAG" = "unsupported" ]; then
     warn "Sawyer Fast Llama: skipping binary (unsupported platform: $OS $ARCH)"
-    warn "sawyer bench will use system llama-bench if available"
+    warn "sawyer-agent bench will use system llama-bench if available"
 else
     BINARY_NAME="sawyer-fast-llama-${PLATFORM_TAG}"
     DEST="${BIN_DIR}/${BINARY_NAME}"
@@ -239,12 +239,12 @@ else
     #   Linux x64 CLI:  sawyer-fast-llama-cli-linux-x64 (on llama.cpp repo)
     #   Windows x64:    sawyer-fast-llama-cli-windows-x64.zip (on llama.cpp repo)
     #   Windows CUDA:   sawyer-fast-llama-windows-cuda.zip (on llama.cpp repo)
-    #   macOS:          Not yet available — sawyer bench will use system llama
+    #   macOS:          Not yet available — sawyer-agent bench will use system llama
 
     if [ "$PLATFORM_TAG" = "macos-x64" ] || [ "$PLATFORM_TAG" = "macos-arm64" ]; then
         # No macOS binary in the release yet
         info "macOS Fast Llama binary not yet available for download."
-        info "sawyer bench will use llama.cpp from Homebrew if installed."
+        info "sawyer-agent bench will use llama.cpp from Homebrew if installed."
         warn "Install llama.cpp: brew install llama.cpp"
         BINARY_NAME=""
         DEST=""
@@ -350,19 +350,19 @@ if ! grep -q "${BIN_DIR}" "$SHELL_RC" 2>/dev/null; then
     info "Run 'source ${SHELL_RC}' or open a new terminal to update PATH."
 fi
 
-# Validate sawyer command
+# Validate sawyer-agent command
 VALIDATION_ERRORS=0
 
 if [ -f "${VENV_DIR}/bin/activate" ]; then
     source "${VENV_DIR}/bin/activate"
 fi
-SAWYER_BIN="${BIN_DIR}/sawyer"
+SAWYER_BIN="${BIN_DIR}/sawyer-agent"
 if [ -f "$SAWYER_BIN" ]; then
     VERSION_CHECK=$("$SAWYER_BIN" --help 2>&1 | head -1 || true)
     if echo "$VERSION_CHECK" | grep -qi "sawyer"; then
-        ok "sawyer command works"
+        ok "sawyer-agent command works"
     else
-        warn "sawyer --help returned unexpected output"
+        warn "sawyer-agent --help returned unexpected output"
         warn "  $VERSION_CHECK"
         VALIDATION_ERRORS=$((VALIDATION_ERRORS + 1))
     fi
@@ -371,7 +371,7 @@ else
     if $PYTHON -m sawyer.cli --help &>/dev/null; then
         ok "sawyer works via python -m sawyer"
     else
-        err "sawyer command not found and python -m sawyer failed"
+        err "sawyer-agent command not found and python -m sawyer failed"
         VALIDATION_ERRORS=$((VALIDATION_ERRORS + 1))
     fi
 fi
@@ -393,20 +393,20 @@ fi
 
 echo ""
 echo -e "  ${BOLD}Quick start:${NC}"
-echo -e "  ${CYAN}sawyer chat${NC}      Start the chat client (web UI at http://localhost:8000)"
-echo -e "  ${CYAN}sawyer serve${NC}     Start serving expert inference requests"
-echo -e "  ${CYAN}sawyer run${NC}       One command: start Sawyer + Ollama + agent"
-echo -e "  ${CYAN}sawyer bench${NC}     Benchmark MoE prefill speedup"
+echo -e "  ${CYAN}sawyer-agent chat${NC}      Start the chat client (web UI at http://localhost:8000)"
+echo -e "  ${CYAN}sawyer-agent serve${NC}     Start serving expert inference requests"
+echo -e "  ${CYAN}sawyer-agent run${NC}       One command: start Sawyer + Ollama + agent"
+echo -e "  ${CYAN}sawyer-agent bench${NC}     Benchmark MoE prefill speedup"
 echo ""
 
 if [ "$PLATFORM" = "macos" ]; then
     echo -e "  ${YELLOW}macOS: For GPU acceleration, install Ollama from https://ollama.com${NC}"
-    echo -e "  ${YELLOW}       Then: ollama pull llama3 && sawyer run${NC}"
+    echo -e "  ${YELLOW}       Then: ollama pull llama3 && sawyer-agent run${NC}"
     echo ""
 fi
 
 if [ "$VALIDATION_ERRORS" -gt 0 ]; then
-    echo -e "  ${YELLOW}If 'sawyer' command not found, run:${NC}"
+    echo -e "  ${YELLOW}If 'sawyer-agent' command not found, run:${NC}"
     echo -e "  ${CYAN}source ${SHELL_RC}${NC}"
     echo ""
 fi
