@@ -369,7 +369,7 @@ FAQ_HTML = """<!DOCTYPE html>
 
 <main>
   <div class="hero">
-    <img class="hero-logo" src="https://raw.githubusercontent.com/drc10101/sawyer-network/main/sawyer_logo.png" alt="Sawyer">
+    <img class="hero-logo" src="https://raw.githubusercontent.com/drc10101/sawyer-network/main/Sawyer_Agent_Github_Readme_Logo.png" alt="Sawyer">
     <h2>Point your GPU at Sawyer.</h2>
     <p>Your inference is always free. Earn from the compute you share. Run locally or join the network.</p>
   </div>
