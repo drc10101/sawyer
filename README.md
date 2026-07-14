@@ -62,38 +62,49 @@ Note: `vllm` and `llama-cpp-python` require CUDA and a C++ compiler. If installa
 
 ---
 
-## Commands
+## Using the Agent
+
+You just want to talk to an AI. You don't care about servers or GPUs. These commands are for you.
 
 | Command | What it does |
 |---------|-------------|
-| `sawyer run` | Start everything — router, model, agent |
-| `sawyer chat` | Web UI + OpenAI-compatible API |
-| `sawyer serve` | Host GPU experts, earn tokens |
-| `sawyer models` | List available models |
-| `sawyer status` | Check node status and token balance |
-| `sawyer register` | Register this machine as a network node |
-| `sawyer download` | Cache model weights locally |
-| `sawyer bench` | Benchmark MoE prefill speedup |
-| `sawyer account create` | Create a token account |
-| `sawyer provider register` | Register as a node provider |
-| `sawyer provider onboarding <id>` | Start Stripe Connect for payouts |
+| `sawyer run` | Start everything at once. Picks a model, starts the router, opens chat. |
+| `sawyer run glm-5.1:cloud` | Same as above, but use a specific model. |
+| `sawyer run --no-agent` | Start the router only. No agent, just the API. |
+| `sawyer run --no-browser` | Don't open the browser window. |
+| `sawyer run --agent cursor` | Use Cursor instead of Hermes as your agent. |
+| `sawyer chat` | Open the chat web page. Talk to the model in your browser. |
+| `sawyer chat --ollama-bridge` | Chat, and also share your local Ollama models with the network. |
+| `sawyer models` | Show every model you can use right now. |
+| `sawyer models --use chat` | Show only chat models. |
+| `sawyer models --use code` | Show only code models. |
+
+---
+
+## Joining the Network
+
+You have a GPU and you want to earn money while it sits idle. These commands are for you.
+
+| Command | What it does |
+|---------|-------------|
+| `sawyer serve` | Start hosting. Your GPU runs expert models for the network. You earn tokens. |
+| `sawyer serve --model mixtral` | Host a specific model's experts. |
+| `sawyer status` | See how many tokens you've served, your uptime, and your earnings. |
+| `sawyer register` | Sign up this machine as a network node. |
+| `sawyer register --gpu` | Sign up and automatically tell the network what GPU you have. |
+| `sawyer download` | Download model files ahead of time so serving starts faster. |
+| `sawyer bench` | Run a speed test. See how fast your GPU can process tokens. |
+| `sawyer account create` | Create your token account. |
+| `sawyer provider register` | Register as a provider so you can get paid. |
+| `sawyer provider onboarding <id>` | Connect your bank via Stripe so you can receive payouts. |
 
 Run `sawyer --help` for the full list.
 
 ---
 
-## Use the Agent
+## Connect Other Tools
 
-### Chat
-
-```bash
-sawyer chat                        # Web UI at http://localhost:8000
-sawyer chat --ollama-bridge        # Also serve local Ollama to the network
-```
-
-### Connect Any Agent
-
-Sawyer exposes an OpenAI-compatible `/v1/chat/completions` endpoint. Any framework that supports custom base URLs works out of the box.
+Sawyer gives you an OpenAI-compatible API at `http://localhost:8000/v1`. Anything that talks to OpenAI can talk to Sawyer. Just set the base URL.
 
 **Hermes:**
 ```bash
@@ -118,23 +129,17 @@ response = client.chat.completions.create(
 )
 ```
 
-**Supported frameworks:** Hermes, OpenClaw, Claude Code, Cursor, Continue, Aider, Cline, LangChain, LlamaIndex, CrewAI, AutoGPT, and any OpenAI-compatible client.
+Works with: Hermes, OpenClaw, Claude Code, Cursor, Continue, Aider, Cline, LangChain, LlamaIndex, CrewAI, AutoGPT, and any OpenAI-compatible client.
 
 Full integration guides: [`docs/agent-integration.md`](docs/agent-integration.md)
 
 ---
 
-## Join the Network
+## Earning on the Network
 
-Your GPU sits idle most of the day. Sawyer puts it to work. Host expert weights, serve inference, earn money. A 4090 on Tier 4 earns 4x what a laptop on Tier 1 earns per token.
+Your GPU sits idle most of the day. Sawyer puts it to work. A 4090 on Tier 4 earns 4x what a laptop on Tier 1 earns per token.
 
-```bash
-sawyer serve                   # Start hosting, begin earning
-sawyer serve --model mixtral   # Pick a model to serve
-sawyer status                  # Check your earnings
-```
-
-When serving, Sawyer hosts a real-time dashboard at `http://localhost:8000/` — tokens served, earnings, uptime, model breakdown, tier badge, payout info. API at `/api/stats`.
+When serving, Sawyer shows a real-time dashboard at `http://localhost:8000/` -- tokens served, earnings, uptime, model breakdown, tier badge, payout info. API at `/api/stats`.
 
 ### Hardware Tiers
 
